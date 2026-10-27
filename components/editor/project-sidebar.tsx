@@ -13,6 +13,12 @@ export interface ProjectSidebarProps {
   className?: string;
 }
 
+/**
+ * Renders a project sidebar overlay with My Projects and Shared placeholder tabs.
+ * `isOpen` controls sliding visibility without unmounting the sidebar.
+ * Close and New Project clicks invoke `onClose` and `onNewProject`, respectively;
+ * the caller handles visibility changes and project creation.
+ */
 export function ProjectSidebar({
   isOpen,
   onClose,

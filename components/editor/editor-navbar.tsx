@@ -14,6 +14,12 @@ export interface EditorNavbarProps {
   className?: string;
 }
 
+/**
+ * Renders editor navigation with a sidebar toggle and center/right content.
+ * The caller controls sidebar state through `isSidebarOpen` (false by default)
+ * and handles toggle clicks through `onToggleSidebar`.
+ * Uses `children` as center content when `centerSection` is falsy.
+ */
 export function EditorNavbar({
   isSidebarOpen = false,
   onToggleSidebar,
