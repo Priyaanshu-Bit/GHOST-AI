@@ -38,7 +38,7 @@ export function EditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "sm:max-w-md bg-surface text-copy-primary border border-border-subtle rounded-3xl p-6 shadow-2xl",
+         "sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto bg-surface text-copy-primary border border-border-subtle rounded-3xl p-6 shadow-2xl",
           className
         )}
       >
