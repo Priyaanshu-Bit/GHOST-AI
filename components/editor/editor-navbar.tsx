@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ export interface EditorNavbarProps {
  * The caller controls sidebar state through `isSidebarOpen` (false by default)
  * and handles toggle clicks through `onToggleSidebar`.
  * Uses `children` as center content when `centerSection` is falsy.
+ * Includes Clerk UserButton in the right section for profile and session management.
  */
 export function EditorNavbar({
   isSidebarOpen = false,
@@ -58,11 +60,11 @@ export function EditorNavbar({
         {centerSection || children}
       </div>
 
-      {/* Right section: stays empty for now */}
-      <div className="flex items-center justify-end gap-2">
+      {/* Right section: custom actions + Clerk UserButton */}
+      <div className="flex items-center justify-end gap-3">
         {rightSection}
+        <UserButton />
       </div>
     </header>
   );
 }
-
