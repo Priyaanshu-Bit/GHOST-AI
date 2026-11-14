@@ -4,7 +4,7 @@ import * as React from "react";
 import { EditorDialog } from "./editor-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useProjectDialogs } from "@/hooks/use-project-dialogs";
+import { useProjectActions } from "@/hooks/use-project-actions";
 
 export function RenameProjectDialog() {
   const {
@@ -14,8 +14,9 @@ export function RenameProjectDialog() {
     projectName,
     setProjectName,
     isLoading,
-    handleRenameSubmit,
-  } = useProjectDialogs();
+    error,
+    handleRenameProject,
+  } = useProjectActions();
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -50,15 +51,15 @@ export function RenameProjectDialog() {
           </Button>
           <Button
             type="button"
-            onClick={() => handleRenameSubmit()}
+            onClick={() => handleRenameProject()}
             disabled={isLoading}
           >
-            Save Changes
+            {isLoading ? "Saving..." : "Save Changes"}
           </Button>
         </>
       }
     >
-      <form onSubmit={handleRenameSubmit} className="space-y-4">
+      <form onSubmit={handleRenameProject} className="space-y-4">
         <div className="space-y-2">
           <label
             htmlFor="rename-project-name"
@@ -75,8 +76,11 @@ export function RenameProjectDialog() {
             className="bg-elevated border-border-subtle text-copy-primary placeholder:text-copy-muted"
           />
         </div>
+
+        {error && (
+          <p className="text-xs text-state-error font-medium">{error}</p>
+        )}
       </form>
     </EditorDialog>
   );
 }
-

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { EditorDialog } from "./editor-dialog";
 import { Button } from "@/components/ui/button";
-import { useProjectDialogs } from "@/hooks/use-project-dialogs";
+import { useProjectActions } from "@/hooks/use-project-actions";
 
 export function DeleteProjectDialog() {
   const {
@@ -11,8 +11,9 @@ export function DeleteProjectDialog() {
     closeDeleteDialog,
     targetProject,
     isLoading,
-    handleDeleteSubmit,
-  } = useProjectDialogs();
+    error,
+    handleDeleteProject,
+  } = useProjectActions();
 
   return (
     <EditorDialog
@@ -44,19 +45,24 @@ export function DeleteProjectDialog() {
           <Button
             type="button"
             variant="destructive"
-            onClick={handleDeleteSubmit}
+            onClick={handleDeleteProject}
             disabled={isLoading}
           >
-            Delete Project
+            {isLoading ? "Deleting..." : "Delete Project"}
           </Button>
         </>
       }
     >
-      <p className="text-xs text-copy-muted">
-        All canvas nodes, edges, specifications, and project metadata associated
-        with this workspace will be permanently removed.
-      </p>
+      <div className="space-y-3">
+        <p className="text-xs text-copy-muted">
+          All canvas nodes, edges, specifications, and project metadata associated
+          with this workspace will be permanently removed.
+        </p>
+
+        {error && (
+          <p className="text-xs text-state-error font-medium">{error}</p>
+        )}
+      </div>
     </EditorDialog>
   );
 }
-

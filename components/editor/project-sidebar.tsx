@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { X, Plus, FolderKanban, Users, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Project } from "@/types/project";
-import { useProjectDialogsSafe } from "@/hooks/use-project-dialogs";
+import { useProjectActionsSafe } from "@/hooks/use-project-actions";
 
 export interface ProjectSidebarProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export interface ProjectSidebarProps {
 /**
  * Renders a project sidebar overlay with My Projects and Shared tabs.
  * Supports project item actions (rename, delete) on owned projects only.
+ * Navigates to `/editor/[projectId]` when a project item is clicked.
  * Includes a mobile backdrop scrim that closes the sidebar when tapped outside.
  */
 export function ProjectSidebar({
@@ -31,19 +33,16 @@ export function ProjectSidebar({
   onNewProject,
   onRenameProject,
   onDeleteProject,
-  ownedProjects: propsOwned,
-  sharedProjects: propsShared,
+  ownedProjects = [],
+  sharedProjects = [],
   activeProjectId,
   className,
 }: ProjectSidebarProps) {
-  const contextValue = useProjectDialogsSafe();
+  const actions = useProjectActionsSafe();
 
-  const owned = propsOwned ?? contextValue?.ownedProjects ?? [];
-  const shared = propsShared ?? contextValue?.sharedProjects ?? [];
-
-  const handleNewProject = onNewProject ?? contextValue?.openCreateDialog;
-  const handleRename = onRenameProject ?? contextValue?.openRenameDialog;
-  const handleDelete = onDeleteProject ?? contextValue?.openDeleteDialog;
+  const handleNewProject = onNewProject ?? actions?.openCreateDialog;
+  const handleRename = onRenameProject ?? actions?.openRenameDialog;
+  const handleDelete = onDeleteProject ?? actions?.openDeleteDialog;
 
   return (
     <>
@@ -105,7 +104,7 @@ export function ProjectSidebar({
             value="my-projects"
             className="flex-1 overflow-y-auto px-3 py-2 outline-none"
           >
-            {owned.length === 0 ? (
+            {ownedProjects.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center">
                 <div className="w-10 h-10 rounded-xl bg-subtle flex items-center justify-center mb-3 text-copy-muted">
                   <FolderKanban className="h-5 w-5" />
@@ -117,50 +116,54 @@ export function ProjectSidebar({
               </div>
             ) : (
               <ul className="space-y-1">
-                {owned.map((project) => (
-                  <li
-                    key={project.id}
-                    className={cn(
-                      "group flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-colors select-none",
-                      activeProjectId === project.id
-                        ? "bg-elevated text-copy-primary border border-border-subtle"
-                        : "text-copy-secondary hover:text-copy-primary hover:bg-subtle"
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <FolderKanban className="h-4 w-4 text-copy-muted shrink-0 group-hover:text-copy-secondary" />
-                      <span className="truncate">{project.name}</span>
-                    </div>
+                {ownedProjects.map((project) => (
+                  <li key={project.id}>
+                    <Link
+                      href={`/editor/${project.id}`}
+                      className={cn(
+                        "group flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-colors select-none",
+                        activeProjectId === project.id
+                          ? "bg-elevated text-copy-primary border border-border-subtle"
+                          : "text-copy-secondary hover:text-copy-primary hover:bg-subtle"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <FolderKanban className="h-4 w-4 text-copy-muted shrink-0 group-hover:text-copy-secondary" />
+                        <span className="truncate">{project.name}</span>
+                      </div>
 
-                    {/* Actions: Show only for owned projects */}
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRename?.(project);
-                        }}
-                        aria-label={`Rename ${project.name}`}
-                        title="Rename project"
-                        className="text-copy-muted hover:text-copy-primary hover:bg-elevated"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete?.(project);
-                        }}
-                        aria-label={`Delete ${project.name}`}
-                        title="Delete project"
-                        className="text-copy-muted hover:text-state-error hover:bg-elevated"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                      {/* Actions: Show only for owned projects */}
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleRename?.(project);
+                          }}
+                          aria-label={`Rename ${project.name}`}
+                          title="Rename project"
+                          className="text-copy-muted hover:text-copy-primary hover:bg-elevated"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDelete?.(project);
+                          }}
+                          aria-label={`Delete ${project.name}`}
+                          title="Delete project"
+                          className="text-copy-muted hover:text-state-error hover:bg-elevated"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -172,7 +175,7 @@ export function ProjectSidebar({
             value="shared"
             className="flex-1 overflow-y-auto px-3 py-2 outline-none"
           >
-            {shared.length === 0 ? (
+            {sharedProjects.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center">
                 <div className="w-10 h-10 rounded-xl bg-subtle flex items-center justify-center mb-3 text-copy-muted">
                   <Users className="h-5 w-5" />
@@ -184,19 +187,21 @@ export function ProjectSidebar({
               </div>
             ) : (
               <ul className="space-y-1">
-                {shared.map((project) => (
-                  <li
-                    key={project.id}
-                    className={cn(
-                      "flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors select-none",
-                      activeProjectId === project.id
-                        ? "bg-elevated text-copy-primary border border-border-subtle"
-                        : "text-copy-secondary hover:text-copy-primary hover:bg-subtle"
-                    )}
-                  >
-                    <Users className="h-4 w-4 text-copy-muted shrink-0" />
-                    <span className="truncate flex-1">{project.name}</span>
-                    {/* Note: Actions are hidden for shared projects */}
+                {sharedProjects.map((project) => (
+                  <li key={project.id}>
+                    <Link
+                      href={`/editor/${project.id}`}
+                      className={cn(
+                        "flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors select-none",
+                        activeProjectId === project.id
+                          ? "bg-elevated text-copy-primary border border-border-subtle"
+                          : "text-copy-secondary hover:text-copy-primary hover:bg-subtle"
+                      )}
+                    >
+                      <Users className="h-4 w-4 text-copy-muted shrink-0" />
+                      <span className="truncate flex-1">{project.name}</span>
+                      {/* Actions are hidden for shared projects */}
+                    </Link>
                   </li>
                 ))}
               </ul>

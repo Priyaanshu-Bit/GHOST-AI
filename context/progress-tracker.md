@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Phase 5: Prisma Schema & Data Layer (Completed)
+- Phase 7: Wire Editor Home (Completed)
 
 ## Current Goal
 
-- Ready for `06-project-apis.md`.
+- Ready for `08-editor-workspace-shell.md`.
 
 ## Completed
 
@@ -53,6 +53,24 @@ Update this file whenever the current phase, active feature, or implementation s
   - Created `lib/prisma.ts` as a cached singleton branching by `DATABASE_URL` (`prisma+postgres://` for Accelerate, `@prisma/adapter-pg` with `pg.Pool` otherwise, cached on `globalThis` in development). The direct adapter uses the URL's `schema` parameter, defaulting to `public`.
   - Successfully ran initial migration (`20261114105145_init`) against the PostgreSQL database and generated Prisma Client.
   - Verified compilation (`npm run build`) and linting (`npm run lint`) pass with 0 errors and 0 warnings.
+- `06-project-apis.md` — Project API Routes:
+  - Created `lib/projects.ts` module with data helpers for `getProjectsForUser`, `createProject`, `getProjectById`, `renameProject`, and `deleteProject`.
+  - Built `GET /api/projects` endpoint returning user's owned and shared projects (401 when unauthenticated).
+  - Built `POST /api/projects` endpoint creating a project with owner set to Clerk user ID, defaulting missing name to `Untitled Project`, and preserving schema's ID strategy (401 when unauthenticated).
+  - Built `PATCH /api/projects/[projectId]` endpoint to rename projects with owner-only access control (401 unauthenticated, 404 not found, 403 non-owner).
+  - Built `DELETE /api/projects/[projectId]` endpoint with owner-only access control and cascade deletion (401 unauthenticated, 404 not found, 403 non-owner).
+  - Updated `proxy.ts` middleware so API routes return standard 401 JSON responses rather than browser redirects.
+  - Hardened project APIs with JSON object validation, duplicate client-ID conflict responses, verified-email sharing, and owner-scoped mutation predicates.
+  - Verified compilation (`npm run build`) and linting (`npm run lint`) pass with 0 errors.
+- `07-wire-editor-home.md` — Wire Editor Home Sidebar & Dialogs:
+  - Converted `app/editor/page.tsx` into an async Server Component that fetches owned and shared projects via `getProjectsForUser(userId, userEmail)` without client-side fetching for initial load.
+  - Created `components/editor/editor-home-view.tsx` client boundary component passing real server data into `EditorLayout` and `ProjectSidebar`.
+  - Built `hooks/use-project-actions.tsx` managing dialog states, name inputs, unique suffix generation, live room ID previews (`${slug}-${suffix}`), and real API mutations.
+  - Wired create flow (`POST /api/projects`) aligning project ID with Liveblocks room ID and navigating to `/editor/[projectId]` on success.
+  - Wired rename flow (`PATCH /api/projects/[id]`) pre-filling target name, auto-focusing input, and calling `router.refresh()` on success.
+  - Wired delete flow (`DELETE /api/projects/[id]`) showing project name, redirecting to `/editor` if active workspace, and calling `router.refresh()` on success.
+  - Updated `components/editor/project-sidebar.tsx` to render real database project lists with navigation links and owned mutation controls.
+  - Verified compilation (`npm run build`) and linting (`npm run lint`) pass with 0 errors.
 
 ## In Progress
 
@@ -60,7 +78,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- `06-project-apis.md` — Project API Routes
+- `08-editor-workspace-shell.md` — Editor Workspace Shell
 
 ## Open Questions
 

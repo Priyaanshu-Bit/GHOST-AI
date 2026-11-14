@@ -1,11 +1,15 @@
 export interface Project {
   id: string;
   name: string;
+  ownerId?: string;
   slug?: string;
   isOwner?: boolean;
+  status?: string;
+  canvasJsonPath?: string | null;
   updatedAt?: string | Date;
   createdAt?: string | Date;
   description?: string | null;
+  collaborators?: unknown[];
 }
 
 /**
@@ -18,6 +22,13 @@ export function slugify(text: string): string {
     .replace(/[^\w\s-]/g, "")
     .replace(/[\s_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Generates a short random alphanumeric suffix for unique room IDs.
+ */
+export function generateShortSuffix(): string {
+  return Math.random().toString(36).substring(2, 7);
 }
 
 export const INITIAL_MOCK_OWNED_PROJECTS: Project[] = [

@@ -4,7 +4,7 @@ import * as React from "react";
 import { EditorDialog } from "./editor-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useProjectDialogs } from "@/hooks/use-project-dialogs";
+import { useProjectActions } from "@/hooks/use-project-actions";
 
 export function CreateProjectDialog() {
   const {
@@ -12,10 +12,11 @@ export function CreateProjectDialog() {
     closeCreateDialog,
     projectName,
     setProjectName,
-    slug,
+    roomId,
     isLoading,
-    handleCreateSubmit,
-  } = useProjectDialogs();
+    error,
+    handleCreateProject,
+  } = useProjectActions();
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -47,15 +48,15 @@ export function CreateProjectDialog() {
           </Button>
           <Button
             type="button"
-            onClick={() => handleCreateSubmit()}
+            onClick={() => handleCreateProject()}
             disabled={isLoading}
           >
-            Create Project
+            {isLoading ? "Creating..." : "Create Project"}
           </Button>
         </>
       }
     >
-      <form onSubmit={handleCreateSubmit} className="space-y-4">
+      <form onSubmit={handleCreateProject} className="space-y-4">
         <div className="space-y-2">
           <label
             htmlFor="create-project-name"
@@ -74,18 +75,21 @@ export function CreateProjectDialog() {
           />
         </div>
 
-        {/* Live slug preview */}
+        {/* Live room ID preview */}
         <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-subtle/50 border border-border-subtle">
-          <span className="text-xs font-medium text-copy-muted">Slug Preview</span>
+          <span className="text-xs font-medium text-copy-muted">Room ID Preview</span>
           <div className="flex items-center gap-1.5 text-xs font-mono text-copy-secondary break-all">
             <span className="text-copy-faint select-none">/editor/</span>
             <span className="text-brand font-semibold">
-              {slug || "untitled-project"}
+              {roomId}
             </span>
           </div>
         </div>
+
+        {error && (
+          <p className="text-xs text-state-error font-medium">{error}</p>
+        )}
       </form>
     </EditorDialog>
   );
 }
-

@@ -3,16 +3,20 @@
 import * as React from "react";
 import { EditorNavbar } from "./editor-navbar";
 import { ProjectSidebar } from "./project-sidebar";
-import { ProjectDialogsProvider } from "@/hooks/use-project-dialogs";
+import { ProjectActionsProvider } from "@/hooks/use-project-actions";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { RenameProjectDialog } from "./rename-project-dialog";
 import { DeleteProjectDialog } from "./delete-project-dialog";
+import { Project } from "@/types/project";
 
 export interface EditorLayoutProps {
   children: React.ReactNode;
   centerSection?: React.ReactNode;
   rightSection?: React.ReactNode;
   defaultSidebarOpen?: boolean;
+  ownedProjects?: Project[];
+  sharedProjects?: Project[];
+  activeProjectId?: string;
 }
 
 function EditorLayoutContent({
@@ -20,6 +24,9 @@ function EditorLayoutContent({
   centerSection,
   rightSection,
   defaultSidebarOpen = false,
+  ownedProjects = [],
+  sharedProjects = [],
+  activeProjectId,
 }: EditorLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(defaultSidebarOpen);
 
@@ -43,13 +50,16 @@ function EditorLayoutContent({
         <ProjectSidebar
           isOpen={isSidebarOpen}
           onClose={closeSidebar}
+          ownedProjects={ownedProjects}
+          sharedProjects={sharedProjects}
+          activeProjectId={activeProjectId}
         />
         <main className="relative flex-1 flex flex-col overflow-hidden bg-base">
           {children}
         </main>
       </div>
 
-      {/* Project dialogs */}
+      {/* Project dialogs wired to real API mutations */}
       <CreateProjectDialog />
       <RenameProjectDialog />
       <DeleteProjectDialog />
@@ -59,8 +69,8 @@ function EditorLayoutContent({
 
 export function EditorLayout(props: EditorLayoutProps) {
   return (
-    <ProjectDialogsProvider>
+    <ProjectActionsProvider activeProjectId={props.activeProjectId}>
       <EditorLayoutContent {...props} />
-    </ProjectDialogsProvider>
+    </ProjectActionsProvider>
   );
 }
