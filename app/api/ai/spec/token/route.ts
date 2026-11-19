@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { auth as triggerAuth } from "@trigger.dev/sdk";
+import { triggerAuth } from "@/lib/trigger";
 import { prisma } from "@/lib/prisma";
 
 interface TokenRequestBody {
@@ -89,9 +89,13 @@ export async function POST(request: Request) {
       expiresIn: "1h",
     });
   } catch (err) {
-    console.error("Failed to generate Trigger.dev public token for spec run:", err);
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    console.error("Failed to generate Trigger.dev public token for spec run:", errorDetail, err);
     return NextResponse.json(
-      { error: "Failed to generate spec token" },
+      {
+        error: "Failed to generate spec token",
+        details: errorDetail,
+      },
       { status: 500 }
     );
   }

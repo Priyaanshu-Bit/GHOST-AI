@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { auth as triggerAuth } from "@trigger.dev/sdk";
+import { triggerAuth } from "@/lib/trigger";
 import { prisma } from "@/lib/prisma";
 
 interface TokenRequestBody {
@@ -78,9 +78,13 @@ export async function POST(request: Request) {
       runId: runId.trim(),
     });
   } catch (err) {
-    console.error("Failed to generate Trigger.dev public token:", err);
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    console.error("Failed to generate Trigger.dev public token:", errorDetail, err);
     return NextResponse.json(
-      { error: "Failed to generate run token" },
+      {
+        error: "Failed to generate run token",
+        details: errorDetail,
+      },
       { status: 500 }
     );
   }

@@ -336,9 +336,10 @@ export function AiSidebar({
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
-          throw new Error(
-            errData.error || `Design request failed with HTTP ${response.status}`
-          );
+          const errMsg = errData.details
+            ? `${errData.error || "Design request failed"}: ${errData.details}`
+            : errData.error || `Design request failed with HTTP ${response.status}`;
+          throw new Error(errMsg);
         }
 
         const data = await response.json();
@@ -597,9 +598,10 @@ export function AiSidebar({
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(
-          errJson.error || `Spec request failed with HTTP ${response.status}`
-        );
+        const errMsg = errJson.details
+          ? `${errJson.error || "Spec request failed"}: ${errJson.details}`
+          : errJson.error || `Spec request failed with HTTP ${response.status}`;
+        throw new Error(errMsg);
       }
 
       const data = await response.json();

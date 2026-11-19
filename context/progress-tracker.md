@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- CodeRabbit PR #6 Review Remediation (Completed)
+- Production Deployment & Vercel Trigger.dev Environment Fix (Completed)
 
 ## Current Goal
 
-- All 61 CodeRabbit PR review findings addressed across security, persistence, canvas collaboration, and UI accessibility.
+- Resolve Trigger.dev task dispatch failure on Vercel (`No matching branch env`) and prevent infinite canvas autosave retry loops.
 
 ## In Progress
 
@@ -16,9 +16,18 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- PR #6 merge and production deployment.
+- Deploy Trigger.dev background tasks to cloud (`npx trigger.dev@latest deploy`) or run dev worker.
 
 ## Completed
+
+- **Trigger.dev Vercel Branch Compatibility**:
+  - Identified root cause of `Error [TriggerApiError]: No matching branch env (HTTP 401)`: Vercel automatically sets `VERCEL_GIT_COMMIT_REF="main"`, causing `@trigger.dev/sdk` to inject `x-trigger-branch: main`, which fails when Trigger.dev has no matching preview branch environment.
+  - Created centralized `lib/trigger.ts` configured with `previewBranch: process.env.TRIGGER_PREVIEW_BRANCH || ""` to prevent unwanted preview branch header injection on production/standard deployments.
+  - Sanitized `TRIGGER_SECRET_KEY` and `BLOB_READ_WRITE_TOKEN` to strip accidental quotes and whitespace.
+  - Updated all 4 task dispatch and token routes (`/api/ai/design`, `/api/ai/design/token`, `/api/ai/spec`, `/api/ai/spec/token`) to import from `@/lib/trigger`.
+  - Added structured error response (`details: err.message`) and surfaced it in `components/editor/ai-sidebar.tsx`.
+  - Hardened `hooks/useCanvasAutosave.ts` with `saveSucceeded` flag to eliminate infinite fast retry loops on canvas PUT errors.
+
 
 - CodeRabbit PR #6 Review Remediation:
   - Addressed all 61 review comments (29 Major, 30 Minor, 2 Trivial).
