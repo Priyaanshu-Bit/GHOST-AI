@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { tasks, auth as triggerAuth } from "@trigger.dev/sdk";
+import { tasks, triggerAuth } from "@/lib/trigger";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserIdentity, checkProjectAccess } from "@/lib/project-access";
 import type { designAgent } from "@/trigger/design-agent";
@@ -116,9 +116,13 @@ export async function POST(request: Request) {
       publicToken,
     });
   } catch (err) {
-    console.error("Failed to trigger design agent task:", err);
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    console.error("Failed to trigger design agent task:", errorDetail, err);
     return NextResponse.json(
-      { error: "Failed to trigger background design task" },
+      {
+        error: "Failed to trigger background design task",
+        details: errorDetail,
+      },
       { status: 500 }
     );
   }

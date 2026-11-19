@@ -132,6 +132,7 @@ export function useCanvasAutosave({
     isSavingRef.current = true;
     updateStatus("saving");
 
+    let saveSucceeded = false;
     try {
       const res = await fetch(`/api/projects/${projectId}/canvas`, {
         method: "PUT",
@@ -145,22 +146,27 @@ export function useCanvasAutosave({
 
       lastSavedJsonRef.current = currentJson;
       updateStatus("saved");
+      saveSucceeded = true;
     } catch (err) {
       console.error("Canvas autosave error:", err);
       updateStatus("error");
+      hasQueuedSaveRef.current = false;
     } finally {
       isSavingRef.current = false;
 
-      // Check if another change occurred while the write was in flight
-      const latestJson = serializeCanvas(
-        latestDataRef.current.nodes,
-        latestDataRef.current.edges
-      );
+      // Only schedule follow-up if save succeeded and new edits arrived while in flight,
+      // avoiding infinite fast retries on persistent server/token errors
+      if (saveSucceeded) {
+        const latestJson = serializeCanvas(
+          latestDataRef.current.nodes,
+          latestDataRef.current.edges
+        );
 
-      if (hasQueuedSaveRef.current || latestJson !== lastSavedJsonRef.current) {
-        hasQueuedSaveRef.current = false;
-        // Schedule immediate follow-up write
-        performSaveRef.current();
+        if (hasQueuedSaveRef.current || latestJson !== lastSavedJsonRef.current) {
+          hasQueuedSaveRef.current = false;
+          // Schedule follow-up write
+          performSaveRef.current();
+        }
       }
     }
   }, [projectId, updateStatus]);

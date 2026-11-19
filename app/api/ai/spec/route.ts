@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { tasks, auth as triggerAuth } from "@trigger.dev/sdk";
+import { tasks, triggerAuth } from "@/lib/trigger";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserIdentity, checkProjectAccess } from "@/lib/project-access";
 import { SpecTriggerRequestSchema } from "@/types/tasks";
@@ -95,9 +95,13 @@ export async function POST(request: Request) {
       publicToken,
     });
   } catch (err) {
-    console.error("Failed to trigger generate-spec task:", err);
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    console.error("Failed to trigger generate-spec task:", errorDetail, err);
     return NextResponse.json(
-      { error: "Failed to trigger spec background task" },
+      {
+        error: "Failed to trigger spec background task",
+        details: errorDetail,
+      },
       { status: 500 }
     );
   }

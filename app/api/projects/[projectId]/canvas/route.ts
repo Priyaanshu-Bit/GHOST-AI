@@ -73,6 +73,7 @@ export async function PUT(request: Request, context: RouteParams) {
 
   try {
     const previousBlobUrl = access.project.canvasJsonPath;
+    const sanitizedBlobToken = process.env.BLOB_READ_WRITE_TOKEN?.replace(/^["']|["']$/g, "").trim();
 
     // Upload latest canvas JSON snapshot to Vercel Blob
     // Handles both private stores (default for secure enterprise buckets) and public stores
@@ -84,6 +85,7 @@ export async function PUT(request: Request, context: RouteParams) {
         {
           access: "private",
           contentType: "application/json",
+          token: sanitizedBlobToken,
         }
       );
     } catch (putErr) {
@@ -98,6 +100,7 @@ export async function PUT(request: Request, context: RouteParams) {
           {
             access: "public",
             contentType: "application/json",
+            token: sanitizedBlobToken,
           }
         );
       } else {
@@ -115,7 +118,9 @@ export async function PUT(request: Request, context: RouteParams) {
       previousBlobUrl.includes("blob.vercel-storage.com")
     ) {
       try {
-        await del(previousBlobUrl);
+        await del(previousBlobUrl, {
+          token: sanitizedBlobToken,
+        });
       } catch (delErr) {
         console.warn("Failed to delete stale canvas blob:", delErr);
       }
@@ -179,6 +184,7 @@ export async function GET(_request: Request, context: RouteParams) {
 
   try {
     let canvasData: Record<string, unknown> | null = null;
+    const sanitizedBlobToken = process.env.BLOB_READ_WRITE_TOKEN?.replace(/^["']|["']$/g, "").trim();
 
     // For Vercel Blob URLs, use the authenticated blob get() SDK
     // which handles private stores requiring token authorization
@@ -187,6 +193,7 @@ export async function GET(_request: Request, context: RouteParams) {
       try {
         const blobRes = await get(blobUrl, {
           access: isPrivate ? "private" : "public",
+          token: sanitizedBlobToken,
         });
         if (blobRes && blobRes.statusCode === 200 && blobRes.stream) {
           const text = await new Response(blobRes.stream).text();
@@ -197,6 +204,7 @@ export async function GET(_request: Request, context: RouteParams) {
         try {
           const fallbackRes = await get(blobUrl, {
             access: isPrivate ? "public" : "private",
+            token: sanitizedBlobToken,
           });
           if (fallbackRes && fallbackRes.statusCode === 200 && fallbackRes.stream) {
             const text = await new Response(fallbackRes.stream).text();
