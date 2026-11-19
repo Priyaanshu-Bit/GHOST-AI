@@ -42,3 +42,18 @@ next-env.d.ts
 node_modules/
 dist/
 .env
+.trigger/
+
+# IDE and local agent metadata
+.agents/
+.vscode/
+.gemini/
+.cursor/
+.claude/
+.aider-desk/
+.github/skills/
+skills-lock.json
+/data/
+CLAUDE.md
+opencode.json
+

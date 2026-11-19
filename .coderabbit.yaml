@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+version: 2
+language: "en-US"
+reviews:
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!**/.agents/**"
+    - "!**/.github/**"
+    - "!package-lock.json"
