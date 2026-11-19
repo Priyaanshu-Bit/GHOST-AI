@@ -7,6 +7,10 @@ import {
   type GenerateSpecPayload,
 } from "@/types/tasks";
 
+function escapeCell(str: string): string {
+  return str.replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
+}
+
 /**
  * Robust fallback generator that synthesizes a structured Markdown technical spec
  * directly from graph nodes, edges, and collaborative chat context when
@@ -22,16 +26,16 @@ function createFallbackTechnicalSpec(payload: GenerateSpecPayload): string {
     const label = (data.label as string) || (n.id as string) || `Component ${idx + 1}`;
     const description = (data.description as string) || "Core system component";
     const shape = (data.shape as string) || "rectangle";
-    return `| \`${label}\` | ${shape} | ${description} |`;
+    return `| \`${escapeCell(label)}\` | ${escapeCell(shape)} | ${escapeCell(description)} |`;
   });
 
   // Extract edge connections
   const edgeRows = edges.map((e) => {
     const data = (e.data as Record<string, unknown>) || {};
-    const label = (data.label as string) || "HTTPS / Direct";
+    const label = (data.label as string) || "Direct Connection";
     const source = (e.source as string) || "Source";
     const target = (e.target as string) || "Target";
-    return `| \`${source}\` | \`${target}\` | \`${label}\` |`;
+    return `| \`${escapeCell(source)}\` | \`${escapeCell(target)}\` | \`${escapeCell(label)}\` |`;
   });
 
   // Extract recent prompt requirements from chat
@@ -43,19 +47,19 @@ function createFallbackTechnicalSpec(payload: GenerateSpecPayload): string {
   const requirementsText =
     recentUserPrompts.length > 0
       ? recentUserPrompts.join("\n")
-      : "- High availability, real-time message exchange, and reliable data persistence.";
+      : "- High availability, modular design, and reliable data persistence.";
 
   return `# System Architecture Specification
 
 **Project Workspace:** \`${roomId}\`  
 **Generated At:** ${now}  
-**Status:** Approved Technical Architecture  
+**Status:** Draft Architecture Specification  
 
 ---
 
 ## 1. Executive Summary
 
-This document describes the high-level system architecture and operational topology derived from the collaborative canvas design. The system is engineered to provide modular service boundaries, high availability, sub-millisecond real-time communication, and strict data persistence.
+This document describes the high-level system architecture and operational topology derived from the collaborative canvas design.
 
 ### Key Requirements & Constraints
 ${requirementsText}
@@ -64,52 +68,52 @@ ${requirementsText}
 
 ## 2. Architecture & Service Topology
 
-The system is decomposed into ${nodes.length > 0 ? nodes.length : "several"} primary components:
+The observed system topology consists of ${nodes.length > 0 ? `${nodes.length} component(s)` : "no defined components"}:
 
 | Component Name | Shape / Type | Role & Responsibility |
 | :--- | :--- | :--- |
-${nodeRows.length > 0 ? nodeRows.join("\n") : "| `API Gateway` | diamond | Ingress routing, TLS, and rate limiting |\n| `Core Service` | rectangle | Primary domain business logic |\n| `Primary Database` | cylinder | Persistent relational transactional store |"}
+${nodeRows.length > 0 ? nodeRows.join("\n") : "| `Unspecified` | none | No components defined in canvas |"}
 
 ---
 
 ## 3. Communication Protocols & Data Flow
 
-Inter-service communication is structured with defined protocol boundaries:
+Inter-service communication observed in the design:
 
 | Source Component | Destination Component | Protocol / Transport |
 | :--- | :--- | :--- |
-${edgeRows.length > 0 ? edgeRows.join("\n") : "| `Client Apps` | `API Gateway` | `WSS / HTTPS` |\n| `API Gateway` | `Core Service` | `gRPC` |\n| `Core Service` | `Primary Database` | `TCP / SQL` |"}
+${edgeRows.length > 0 ? edgeRows.join("\n") : "| `Unspecified` | `Unspecified` | No inter-service connections defined in canvas |"}
 
 ---
 
-## 4. Data Storage & Persistence Model
+## 4. Data Storage & Persistence Model (Recommendations)
 
-- **Transactional Storage:** State management is segregated between cache and persistent tiers.
-- **Caching Layer:** High-frequency read queries utilize in-memory key-value caching with TTL expiration.
-- **Data Durability:** Relational transactional data is backed up with automated replication and point-in-time recovery.
-
----
-
-## 5. Security & Authentication Boundaries
-
-1. **Edge Security:** TLS termination, DDoS mitigation, and request throttling at the ingress gateway.
-2. **Identity Verification:** JWT validation and role-based access control (RBAC) enforced on every API route.
-3. **Internal Zero-Trust:** Microservice-to-microservice traffic is authenticated via mutual TLS (mTLS) or private VPC subnets.
+- **Transactional Storage:** State management should be segregated between cache and persistent tiers based on domain workload.
+- **Caching Layer:** High-frequency read queries can utilize in-memory key-value caching with TTL expiration.
+- **Data Durability:** Relational transactional data should be backed up with automated replication and point-in-time recovery.
 
 ---
 
-## 6. Scalability & Resilience
+## 5. Security & Authentication Boundaries (Recommendations)
 
-- **Horizontal Scaling:** Stateless compute nodes auto-scale based on CPU utilization and request concurrency.
+1. **Edge Security:** TLS termination, DDoS mitigation, and request throttling at the ingress boundary.
+2. **Identity Verification:** JWT validation and role-based access control (RBAC) recommended on sensitive routes.
+3. **Internal Zero-Trust:** Microservice-to-microservice traffic should be authenticated via mutual TLS (mTLS) or private VPC subnets.
+
+---
+
+## 6. Scalability & Resilience (Recommendations)
+
+- **Horizontal Scaling:** Stateless compute nodes should auto-scale based on CPU utilization and request concurrency.
 - **Failure Isolation:** Asynchronous queues decouple spike processing to prevent cascading failures.
-- **Circuit Breakers:** Outgoing third-party requests employ retry backoff and circuit breaker patterns.
+- **Circuit Breakers:** Outgoing third-party requests should employ retry backoff and circuit breaker patterns.
 
 ---
 
 ## 7. Implementation Roadmap
 
-1. Provision cloud infrastructure and networking VPCs.
-2. Deploy the primary database cluster and run initial schema migrations.
+1. Refine and approve architecture topology and service boundaries.
+2. Provision cloud infrastructure and networking VPCs.
 3. Deploy core services and configure ingress gateway routes.
 4. Establish distributed tracing, synthetic health-checks, and metrics dashboards.
 `;
@@ -232,9 +236,10 @@ Keep the output as pure, professional Markdown without any surrounding JSON wrap
           filePath: savedSpec.filePath,
         });
       } catch (saveErr) {
-        logger.error("Failed to persist spec to Vercel Blob", {
+        logger.error("Failed to persist spec to Vercel Blob and database", {
           error: String(saveErr),
         });
+        throw saveErr;
       }
 
       // Step 4: Complete run metadata

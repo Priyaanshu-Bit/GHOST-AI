@@ -96,8 +96,9 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("Failed to trigger generate-spec task:", err);
-    const message =
-      err instanceof Error ? err.message : "Failed to trigger spec background task";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to trigger spec background task" },
+      { status: 500 }
+    );
   }
 }

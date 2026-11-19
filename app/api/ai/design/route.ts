@@ -28,13 +28,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: DesignRequestBody;
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return NextResponse.json(
+      { error: "Expected JSON object body" },
+      { status: 400 }
+    );
+  }
+
+  const body = rawBody as DesignRequestBody;
   const { prompt, roomId, projectId } = body;
 
   if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
@@ -44,10 +52,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const resolvedProjectId = projectId || roomId;
-  const resolvedRoomId = roomId || projectId;
+  // Reject conflicting project and room identifiers
+  if (projectId && roomId && projectId !== roomId) {
+    return NextResponse.json(
+      { error: "Conflicting project and room identifiers" },
+      { status: 400 }
+    );
+  }
 
-  if (!resolvedProjectId || !resolvedRoomId) {
+  const targetId = projectId || roomId;
+  if (!targetId || typeof targetId !== "string" || !targetId.trim()) {
     return NextResponse.json(
       { error: "Project ID or Room ID is required" },
       { status: 400 }
@@ -55,7 +69,7 @@ export async function POST(request: Request) {
   }
 
   // Verify user has access to the project
-  const access = await checkProjectAccess(resolvedProjectId, identity);
+  const access = await checkProjectAccess(targetId.trim(), identity);
   if (!access.hasAccess || !access.project) {
     return NextResponse.json(
       { error: "Forbidden: You do not have access to this project" },
@@ -63,19 +77,21 @@ export async function POST(request: Request) {
     );
   }
 
+  const authorizedId = access.project.id;
+
   try {
-    // Trigger design agent task through Trigger.dev
+    // Trigger design agent task through Trigger.dev scoped strictly to authorized project ID
     const handle = await tasks.trigger<typeof designAgent>("design-agent", {
       prompt: prompt.trim(),
-      roomId: resolvedRoomId,
-      projectId: resolvedProjectId,
+      roomId: authorizedId,
+      projectId: authorizedId,
     });
 
     // Create TaskRun record in Prisma to track ownership
     await prisma.taskRun.create({
       data: {
         runId: handle.id,
-        projectId: resolvedProjectId,
+        projectId: authorizedId,
         userId,
       },
     });
@@ -101,8 +117,9 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("Failed to trigger design agent task:", err);
-    const message =
-      err instanceof Error ? err.message : "Failed to trigger background task";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to trigger background design task" },
+      { status: 500 }
+    );
   }
 }

@@ -77,14 +77,19 @@ export async function POST(request: Request, context: RouteParams) {
     );
   }
 
-  let body: { markdown?: string };
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!body.markdown || typeof body.markdown !== "string" || !body.markdown.trim()) {
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return NextResponse.json({ error: "Expected JSON object body" }, { status: 400 });
+  }
+
+  const body = rawBody as { markdown?: unknown };
+  if (typeof body.markdown !== "string" || !body.markdown.trim()) {
     return NextResponse.json(
       { error: "Markdown content is required" },
       { status: 400 }

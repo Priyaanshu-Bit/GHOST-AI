@@ -9,6 +9,13 @@ export interface KeyboardShortcutsOptions {
   redo?: () => void;
 }
 
+function isInsideDialog(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest("[role='dialog'], dialog"));
+}
+
 /**
  * Checks whether the target element is an editable input, textarea, select, or contenteditable container.
  * In these elements, global canvas shortcuts must be ignored so normal typing, text deletion,
@@ -113,6 +120,9 @@ export function useKeyboardShortcuts(
         (isMod && e.shiftKey && (e.key === "z" || e.key === "Z")) ||
         (isMod && !e.shiftKey && (e.key === "y" || e.key === "Y"))
       ) {
+        if (isInsideDialog(e.target)) {
+          return;
+        }
         e.preventDefault();
         redo?.();
         return;
@@ -120,6 +130,9 @@ export function useKeyboardShortcuts(
 
       // 4. Undo: `Cmd/Ctrl + Z`
       if (isMod && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        if (isInsideDialog(e.target)) {
+          return;
+        }
         e.preventDefault();
         undo?.();
         return;

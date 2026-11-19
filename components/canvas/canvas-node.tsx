@@ -46,16 +46,15 @@ export function CanvasNodeComponent({ id, data, selected }: NodeProps<CanvasNode
     return null;
   });
 
-  // Broadcast editing presence to all peers in the room
+  // Broadcast editing presence to all peers in the room only when this node is/was actively being edited
   React.useEffect(() => {
-    updateMyPresence({ editingNodeId: isEditing ? id : null });
+    if (isEditing) {
+      updateMyPresence({ editingNodeId: id });
+      return () => {
+        updateMyPresence({ editingNodeId: null });
+      };
+    }
   }, [isEditing, id, updateMyPresence]);
-
-  React.useEffect(() => {
-    return () => {
-      updateMyPresence({ editingNodeId: null });
-    };
-  }, [updateMyPresence]);
 
   // Focus and select textarea text when entering edit mode
   React.useLayoutEffect(() => {
@@ -152,9 +151,19 @@ export function CanvasNodeComponent({ id, data, selected }: NodeProps<CanvasNode
     </div>
   ) : (
     <div
+      role="button"
+      tabIndex={0}
       onDoubleClick={handleDoubleClick}
-      className="flex flex-col items-center justify-center w-full px-2 cursor-text select-none text-center"
-      title="Double-click to edit label"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.stopPropagation();
+          e.preventDefault();
+          setIsEditing(true);
+        }
+      }}
+      className="flex flex-col items-center justify-center w-full px-2 cursor-text select-none text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00c8d4] rounded"
+      title="Double-click or press Enter to edit label"
+      aria-label={`Node label: ${data.label || data.shape}. Press Enter to edit.`}
     >
       <span
         className="text-xs font-semibold text-center break-words leading-tight pointer-events-none max-w-full"
@@ -166,7 +175,7 @@ export function CanvasNodeComponent({ id, data, selected }: NodeProps<CanvasNode
       </span>
       {data.description && (
         <span
-          className="text-[10px] leading-tight mt-1 opacity-70 font-normal max-w-full line-clamp-2 px-1"
+          className="text-[10px] leading-tight mt-1 opacity-70 font-normal max-w-full line-clamp-2 px-1 pointer-events-none"
           style={{ color: data.textColor || "#EDEDED" }}
         >
           {data.description}

@@ -54,8 +54,15 @@ export async function PUT(request: Request, context: RouteParams) {
     return NextResponse.json({ error: "Expected JSON object body" }, { status: 400 });
   }
 
-  const nodes = Array.isArray(body.nodes) ? body.nodes : [];
-  const edges = Array.isArray(body.edges) ? body.edges : [];
+  if (!Array.isArray(body.nodes) || !Array.isArray(body.edges)) {
+    return NextResponse.json(
+      { error: "Invalid canvas payload: nodes and edges must be arrays" },
+      { status: 400 }
+    );
+  }
+
+  const nodes = body.nodes;
+  const edges = body.edges;
 
   const canvasPayload = JSON.stringify({
     version: 1,
@@ -65,18 +72,7 @@ export async function PUT(request: Request, context: RouteParams) {
   });
 
   try {
-    // Clean up previous blob if one already existed
     const previousBlobUrl = access.project.canvasJsonPath;
-    if (
-      previousBlobUrl &&
-      previousBlobUrl.includes("blob.vercel-storage.com")
-    ) {
-      try {
-        await del(previousBlobUrl);
-      } catch (delErr) {
-        console.warn("Failed to delete stale canvas blob:", delErr);
-      }
-    }
 
     // Upload latest canvas JSON snapshot to Vercel Blob
     // Handles both private stores (default for secure enterprise buckets) and public stores
@@ -111,6 +107,19 @@ export async function PUT(request: Request, context: RouteParams) {
 
     // Store returned blob URL in Prisma metadata
     await updateProjectCanvasBlobUrl(projectId, blob.url);
+
+    // Clean up previous blob only after the new snapshot is successfully committed
+    if (
+      previousBlobUrl &&
+      previousBlobUrl !== blob.url &&
+      previousBlobUrl.includes("blob.vercel-storage.com")
+    ) {
+      try {
+        await del(previousBlobUrl);
+      } catch (delErr) {
+        console.warn("Failed to delete stale canvas blob:", delErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -204,12 +213,10 @@ export async function GET(_request: Request, context: RouteParams) {
       const res = await fetch(blobUrl);
       if (!res.ok) {
         console.warn("Could not fetch canvas blob from URL:", blobUrl);
-        return NextResponse.json({
-          nodes: [],
-          edges: [],
-          url: blobUrl,
-          error: "Blob unreachable",
-        });
+        return NextResponse.json(
+          { error: "Failed to retrieve canvas snapshot from storage" },
+          { status: 502 }
+        );
       }
       canvasData = await res.json();
     }
@@ -221,11 +228,9 @@ export async function GET(_request: Request, context: RouteParams) {
     });
   } catch (err) {
     console.error("Failed to load canvas blob:", err);
-    return NextResponse.json({
-      nodes: [],
-      edges: [],
-      url: blobUrl,
-      error: "Failed to parse canvas blob data",
-    });
+    return NextResponse.json(
+      { error: "Failed to retrieve or parse canvas snapshot from storage" },
+      { status: 502 }
+    );
   }
 }

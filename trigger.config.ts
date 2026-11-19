@@ -1,7 +1,7 @@
 import { defineConfig } from "@trigger.dev/sdk";
 
 export default defineConfig({
-  project: "ghost-ai",
+  project: process.env.TRIGGER_PROJECT_REF || "proj_jjddpuhlwoyhypzxukkx",
   dirs: ["./trigger"],
   maxDuration: 3600,
   retries: {

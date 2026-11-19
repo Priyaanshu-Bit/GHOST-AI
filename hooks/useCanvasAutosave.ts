@@ -49,6 +49,7 @@ function serializeCanvas(nodes: CanvasNode[], edges: CanvasEdge[]): string {
  * - Saves via PUT /api/projects/[projectId]/canvas.
  * - Tracks save status: "idle" | "saving" | "saved" | "error".
  * - Supports manual immediate save trigger.
+ * - Queues follow-up saves if state changes or reverts while a save is in-flight.
  */
 export function useCanvasAutosave({
   projectId,
@@ -61,48 +62,81 @@ export function useCanvasAutosave({
   markSavedRef,
 }: UseCanvasAutosaveOptions) {
   const [status, setStatus] = React.useState<SaveStatus>("idle");
-  const lastSavedJsonRef = React.useRef<string>("");
+  // Null represents an unknown baseline before any Blob snapshot has been committed or verified
+  const lastSavedJsonRef = React.useRef<string | null>(null);
   const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const statusResetTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isSavingRef = React.useRef(false);
+  const hasQueuedSaveRef = React.useRef(false);
   const isMountedRef = React.useRef(false);
 
-  // Notify parent component of status updates
+  // Keep ref to latest nodes and edges for in-flight comparison
+  const latestDataRef = React.useRef({ nodes, edges });
+  React.useEffect(() => {
+    latestDataRef.current = { nodes, edges };
+  }, [nodes, edges]);
+
+  // Cancel any active status-reset timer
+  const clearStatusResetTimer = React.useCallback(() => {
+    if (statusResetTimerRef.current) {
+      clearTimeout(statusResetTimerRef.current);
+      statusResetTimerRef.current = null;
+    }
+  }, []);
+
+  // Update status with timer management
   const updateStatus = React.useCallback(
     (nextStatus: SaveStatus) => {
+      clearStatusResetTimer();
       setStatus(nextStatus);
       onStatusChange?.(nextStatus);
+
+      if (nextStatus === "saved") {
+        statusResetTimerRef.current = setTimeout(() => {
+          statusResetTimerRef.current = null;
+          setStatus((cur) => (cur === "saved" ? "idle" : cur));
+          onStatusChange?.("idle");
+        }, 3000);
+      }
     },
-    [onStatusChange]
+    [clearStatusResetTimer, onStatusChange]
   );
+
+  const performSaveRef = React.useRef<() => Promise<void>>(async () => {});
 
   // Core save function
   const performSave = React.useCallback(async () => {
     if (!projectId) return;
 
-    // Clear any pending debounce timer to prevent redundant duplicate saves
+    // Clear any pending debounce timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
 
-    const currentJson = serializeCanvas(nodes, edges);
-
-    // Skip redundant network writes if state matches previous save, but confirm saved state
-    if (currentJson === lastSavedJsonRef.current) {
-      updateStatus("saved");
-      setTimeout(() => {
-        setStatus((current) => (current === "saved" ? "idle" : current));
-        onStatusChange?.("idle");
-      }, 2000);
+    // If already saving, queue a follow-up and return
+    if (isSavingRef.current) {
+      hasQueuedSaveRef.current = true;
       return;
     }
 
+    const { nodes: currentNodes, edges: currentEdges } = latestDataRef.current;
+    const currentJson = serializeCanvas(currentNodes, currentEdges);
+
+    // If current state matches committed baseline, confirm saved
+    if (lastSavedJsonRef.current !== null && currentJson === lastSavedJsonRef.current) {
+      updateStatus("saved");
+      return;
+    }
+
+    isSavingRef.current = true;
     updateStatus("saving");
 
     try {
       const res = await fetch(`/api/projects/${projectId}/canvas`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodes, edges }),
+        body: JSON.stringify({ nodes: currentNodes, edges: currentEdges }),
       });
 
       if (!res.ok) {
@@ -111,26 +145,43 @@ export function useCanvasAutosave({
 
       lastSavedJsonRef.current = currentJson;
       updateStatus("saved");
-
-      // Reset status back to idle after 3 seconds of showing "Saved"
-      setTimeout(() => {
-        setStatus((current) => (current === "saved" ? "idle" : current));
-        onStatusChange?.("idle");
-      }, 3000);
     } catch (err) {
       console.error("Canvas autosave error:", err);
       updateStatus("error");
-    }
-  }, [projectId, nodes, edges, updateStatus, onStatusChange]);
+    } finally {
+      isSavingRef.current = false;
 
-  // Wire manual save handler into ref if provided
+      // Check if another change occurred while the write was in flight
+      const latestJson = serializeCanvas(
+        latestDataRef.current.nodes,
+        latestDataRef.current.edges
+      );
+
+      if (hasQueuedSaveRef.current || latestJson !== lastSavedJsonRef.current) {
+        hasQueuedSaveRef.current = false;
+        // Schedule immediate follow-up write
+        performSaveRef.current();
+      }
+    }
+  }, [projectId, updateStatus]);
+
+  React.useEffect(() => {
+    performSaveRef.current = performSave;
+  }, [performSave]);
+
+  // Wire manual save handler into ref with cleanup
   React.useEffect(() => {
     if (manualSaveRef) {
       manualSaveRef.current = performSave;
+      return () => {
+        if (manualSaveRef.current === performSave) {
+          manualSaveRef.current = null;
+        }
+      };
     }
   }, [manualSaveRef, performSave]);
 
-  // Wire markSaved handler into ref to allow initial load to sync without auto-saving
+  // Wire markSaved handler into ref to record committed Blob baseline without triggering PUT
   React.useEffect(() => {
     if (markSavedRef) {
       markSavedRef.current = (loadedNodes: CanvasNode[], loadedEdges: CanvasEdge[]) => {
@@ -143,15 +194,14 @@ export function useCanvasAutosave({
   React.useEffect(() => {
     if (!enabled || !projectId) return;
 
-    // Skip on initial mount frame until nodes are ready
+    // Skip on initial mount frame
     if (!isMountedRef.current) {
       isMountedRef.current = true;
-      lastSavedJsonRef.current = serializeCanvas(nodes, edges);
       return;
     }
 
     const currentJson = serializeCanvas(nodes, edges);
-    if (currentJson === lastSavedJsonRef.current) {
+    if (lastSavedJsonRef.current !== null && currentJson === lastSavedJsonRef.current) {
       return;
     }
 
@@ -171,6 +221,16 @@ export function useCanvasAutosave({
       }
     };
   }, [nodes, edges, enabled, projectId, debounceMs, performSave]);
+
+  // Hook cleanup
+  React.useEffect(() => {
+    return () => {
+      clearStatusResetTimer();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [clearStatusResetTimer]);
 
   return {
     status,

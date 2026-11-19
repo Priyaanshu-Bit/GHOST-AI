@@ -11,10 +11,19 @@ import {
   useReactFlow,
   MarkerType,
   SelectionMode,
+  ViewportPortal,
   type Connection,
 } from "@xyflow/react";
 import { useLiveblocksFlow, Cursors } from "@liveblocks/react-flow";
-import { useUndo, useRedo, useUpdateMyPresence, useEventListener } from "@liveblocks/react";
+import {
+  useUndo,
+  useRedo,
+  useUpdateMyPresence,
+  useEventListener,
+  useRoom,
+  useStorage,
+  useMutation,
+} from "@liveblocks/react";
 import { Loader2 } from "lucide-react";
 import { CanvasNodeComponent } from "@/components/canvas/canvas-node";
 import { CanvasEdgeComponent } from "@/components/canvas/canvas-edge";
@@ -30,6 +39,7 @@ import {
   CANVAS_NODE_TYPE,
   CANVAS_EDGE_TYPE,
   DEFAULT_NODE_COLOR,
+  NODE_SHAPES,
   type CanvasNode,
   type CanvasEdge,
   type NodeShape,
@@ -156,41 +166,71 @@ function CanvasFlow({
     markSavedRef,
   });
 
-  // Track whether we have checked and handled the initial load for this project
-  const hasAttemptedInitialLoadRef = React.useRef(false);
+  const room = useRoom();
+  const isInitialized = useStorage((root) => (root as Record<string, unknown>)?.isInitialized);
+  const markInitialized = useMutation(({ storage }) => {
+    (storage as unknown as { set: (k: string, v: unknown) => void }).set("isInitialized", true);
+  }, []);
 
-  // Initial load: fetch saved canvas state if room is empty; skip if room already has elements
+  const isRestoringRef = React.useRef(false);
+  const hasCompletedRestoreRef = React.useRef(false);
+
+  // If room already has nodes/edges, ensure it is marked as initialized
   React.useEffect(() => {
-    if (!projectId || hasAttemptedInitialLoadRef.current) return;
-
-    // If the room already has nodes or edges, skip the load entirely to avoid overwriting active collaboration
     if ((nodes && nodes.length > 0) || (edges && edges.length > 0)) {
-      hasAttemptedInitialLoadRef.current = true;
+      if (!isInitialized) {
+        markInitialized();
+      }
+      hasCompletedRestoreRef.current = true;
+    }
+  }, [nodes, edges, isInitialized, markInitialized]);
+
+  // Initial load: fetch saved canvas state only if room has never been initialized
+  React.useEffect(() => {
+    if (!projectId || hasCompletedRestoreRef.current || isRestoringRef.current) return;
+    if (isInitialized) {
+      hasCompletedRestoreRef.current = true;
       return;
     }
 
-    hasAttemptedInitialLoadRef.current = true;
     let isCancelled = false;
+    let retryTimer: NodeJS.Timeout | null = null;
 
     async function loadInitialSavedCanvas() {
+      isRestoringRef.current = true;
       try {
         const res = await fetch(`/api/projects/${projectId}/canvas`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          // Leave recoverable load state and retry after bounded backoff
+          isRestoringRef.current = false;
+          if (!isCancelled) {
+            retryTimer = setTimeout(() => {
+              if (!isCancelled && !hasCompletedRestoreRef.current) {
+                loadInitialSavedCanvas();
+              }
+            }, 3000);
+          }
+          return;
+        }
 
         const data = await res.json();
-        if (isCancelled) return;
+        if (isCancelled) {
+          isRestoringRef.current = false;
+          return;
+        }
 
         const savedNodes: CanvasNode[] = Array.isArray(data.nodes) ? data.nodes : [];
         const savedEdges: CanvasEdge[] = Array.isArray(data.edges) ? data.edges : [];
 
         // If saved canvas has elements, load them into the room
         if (savedNodes.length > 0 || savedEdges.length > 0) {
-          // Double-check room elements haven't been added during fetch
           if (reactFlow.getNodes().length > 0 || reactFlow.getEdges().length > 0) {
+            isRestoringRef.current = false;
+            hasCompletedRestoreRef.current = true;
+            markInitialized();
             return;
           }
 
-          // Pre-sync snapshot in autosave ref to avoid triggering an immediate autosave
           markSavedRef.current?.(savedNodes, savedEdges);
 
           const nodeAddChanges = savedNodes.map((n) => ({
@@ -211,8 +251,20 @@ function CanvasFlow({
             }, 80);
           });
         }
+
+        hasCompletedRestoreRef.current = true;
+        isRestoringRef.current = false;
+        markInitialized();
       } catch (err) {
         console.error("Failed to load initial saved canvas:", err);
+        isRestoringRef.current = false;
+        if (!isCancelled) {
+          retryTimer = setTimeout(() => {
+            if (!isCancelled && !hasCompletedRestoreRef.current) {
+              loadInitialSavedCanvas();
+            }
+          }, 4000);
+        }
       }
     }
 
@@ -220,8 +272,12 @@ function CanvasFlow({
 
     return () => {
       isCancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+      isRestoringRef.current = false;
     };
-  }, [projectId, nodes, edges, onNodesChange, onEdgesChange, fitView, reactFlow]);
+  }, [projectId, isInitialized, markInitialized, onNodesChange, onEdgesChange, fitView, reactFlow]);
 
   // Broadcast cursor position on React Flow mouse events
   const handleMouseMove = React.useCallback(
@@ -247,29 +303,31 @@ function CanvasFlow({
     redo,
   });
 
-  // Handler to replace canvas content with a starter template in collaborative state
+  // Handler to replace canvas content with a starter template in a single Liveblocks batch
   const handleImportTemplate = React.useCallback(
     (template: CanvasTemplate) => {
-      // 1. Clear all existing nodes and edges first
-      if ((nodes && nodes.length > 0) || (edges && edges.length > 0)) {
-        onDelete({
-          nodes: nodes || [],
-          edges: edges || [],
-        });
-      }
+      room.batch(() => {
+        // 1. Clear all existing nodes and edges first
+        if ((nodes && nodes.length > 0) || (edges && edges.length > 0)) {
+          onDelete({
+            nodes: nodes || [],
+            edges: edges || [],
+          });
+        }
 
-      // 2. Add the selected template nodes and edges after canvas is cleared
-      const nodeAddChanges = template.nodes.map((n) => ({
-        type: "add" as const,
-        item: n,
-      }));
-      const edgeAddChanges = template.edges.map((e) => ({
-        type: "add" as const,
-        item: e,
-      }));
+        // 2. Add the selected template nodes and edges
+        const nodeAddChanges = template.nodes.map((n) => ({
+          type: "add" as const,
+          item: n,
+        }));
+        const edgeAddChanges = template.edges.map((e) => ({
+          type: "add" as const,
+          item: e,
+        }));
 
-      onNodesChange(nodeAddChanges);
-      onEdgesChange(edgeAddChanges);
+        onNodesChange(nodeAddChanges);
+        onEdgesChange(edgeAddChanges);
+      });
 
       // 3. Fit view with smooth animation after loading
       requestAnimationFrame(() => {
@@ -278,7 +336,7 @@ function CanvasFlow({
         }, 80);
       });
     },
-    [nodes, edges, onDelete, onNodesChange, onEdgesChange, fitView]
+    [room, nodes, edges, onDelete, onNodesChange, onEdgesChange, fitView]
   );
 
   // Handle template imports triggered via props
@@ -288,21 +346,6 @@ function CanvasFlow({
       onTemplateImported?.();
     }
   }, [templateToImport, handleImportTemplate, onTemplateImported]);
-
-  // Handle template imports triggered via global window event
-  React.useEffect(() => {
-    const onCustomImport = (e: Event) => {
-      const customEvent = e as CustomEvent<CanvasTemplate>;
-      if (customEvent.detail) {
-        handleImportTemplate(customEvent.detail);
-      }
-    };
-
-    window.addEventListener("ghost-ai:import-template", onCustomImport);
-    return () => {
-      window.removeEventListener("ghost-ai:import-template", onCustomImport);
-    };
-  }, [handleImportTemplate]);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -464,9 +507,26 @@ function CanvasFlow({
 
       try {
         const payload = JSON.parse(rawData);
-        const { shape, width = 160, height = 80 } = payload;
+        if (!payload || typeof payload !== "object") return;
+        const { shape } = payload;
+        if (!shape || !NODE_SHAPES.includes(shape)) return;
 
-        if (!shape) return;
+        let width = 160;
+        let height = 80;
+        if (
+          typeof payload.width === "number" &&
+          Number.isFinite(payload.width) &&
+          payload.width > 0
+        ) {
+          width = payload.width;
+        }
+        if (
+          typeof payload.height === "number" &&
+          Number.isFinite(payload.height) &&
+          payload.height > 0
+        ) {
+          height = payload.height;
+        }
 
         // Convert screen drop coordinates to React Flow canvas coordinates
         const flowPosition = screenToFlowPosition({
@@ -501,6 +561,49 @@ function CanvasFlow({
       } catch (err) {
         console.error("Failed to parse dragged shape payload:", err);
       }
+    },
+    [screenToFlowPosition, onNodesChange]
+  );
+
+  // Keyboard and click placement for ShapePanel
+  const handleShapeSelect = React.useCallback(
+    (shapeDef: ShapeDefinition) => {
+      if (!shapeDef || !NODE_SHAPES.includes(shapeDef.shape)) return;
+      const width = shapeDef.defaultWidth;
+      const height = shapeDef.defaultHeight;
+
+      const flowBounds = containerRef.current?.getBoundingClientRect();
+      const clientX = flowBounds
+        ? flowBounds.left + flowBounds.width / 2
+        : window.innerWidth / 2;
+      const clientY = flowBounds
+        ? flowBounds.top + flowBounds.height / 2
+        : window.innerHeight / 2;
+
+      const flowPosition = screenToFlowPosition({ x: clientX, y: clientY });
+      nodeCounter += 1;
+      const nodeId = `${shapeDef.shape}-${Date.now()}-${nodeCounter}`;
+
+      const newNode: CanvasNode = {
+        id: nodeId,
+        type: CANVAS_NODE_TYPE,
+        position: {
+          x: Math.round(flowPosition.x - width / 2),
+          y: Math.round(flowPosition.y - height / 2),
+        },
+        data: {
+          label: "",
+          shape: shapeDef.shape,
+          color: DEFAULT_NODE_COLOR.fill,
+          textColor: DEFAULT_NODE_COLOR.text,
+        },
+        style: {
+          width,
+          height,
+        },
+      };
+
+      onNodesChange([{ type: "add", item: newNode }]);
     },
     [screenToFlowPosition, onNodesChange]
   );
@@ -559,36 +662,37 @@ function CanvasFlow({
           {/* Liveblocks collaborative peer cursors */}
           <Cursors components={{ Cursor: PeerCursor }} />
 
-          {/* Virtual AI cursor rendered when AI background task is active */}
+          {/* Virtual AI cursor rendered in flow coordinates when AI background task is active */}
           {aiPresence?.cursor && (
-            <div
-              className="pointer-events-none absolute z-50 select-none transition-all duration-150"
-              style={{
-                left: aiPresence.cursor.x,
-                top: aiPresence.cursor.y,
-              }}
-            >
-              <svg
-                className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] transform -translate-x-[1px] -translate-y-[1px]"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+            <ViewportPortal>
+              <div
+                className="pointer-events-none absolute z-50 select-none transition-all duration-150"
+                style={{
+                  transform: `translate(${aiPresence.cursor.x}px, ${aiPresence.cursor.y}px)`,
+                }}
               >
-                <path
-                  d="M0.5 0.5L6.5 15.5L9.5 9.5L15.5 6.5L0.5 0.5Z"
-                  fill="#6457F9"
-                  stroke="#080809"
-                  strokeWidth="1.2"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <div className="absolute left-3 top-3 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white whitespace-nowrap shadow-xl flex items-center gap-1.5 bg-[#6457F9]">
-                {aiPresence.thinking && (
-                  <Loader2 className="w-2.5 h-2.5 animate-spin text-white shrink-0" />
-                )}
-                <span>Ghost AI (Architect)</span>
+                <svg
+                  className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] transform -translate-x-[1px] -translate-y-[1px]"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M0.5 0.5L6.5 15.5L9.5 9.5L15.5 6.5L0.5 0.5Z"
+                    fill="#6457F9"
+                    stroke="#080809"
+                    strokeWidth="1.2"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <div className="absolute left-3 top-3 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white whitespace-nowrap shadow-xl flex items-center gap-1.5 bg-[#6457F9]">
+                  {aiPresence.thinking && (
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-white shrink-0" />
+                  )}
+                  <span>Ghost AI (Architect)</span>
+                </div>
               </div>
-            </div>
+            </ViewportPortal>
           )}
         </ReactFlow>
 
@@ -614,7 +718,7 @@ function CanvasFlow({
         {/* Floating pill-shaped control bar at bottom-left for zoom and history */}
         <CanvasControlBar />
 
-        {/* Floating pill-shaped bottom toolbar for dragging shapes */}
+        {/* Floating pill-shaped bottom toolbar for dragging or clicking shapes */}
         <ShapePanel
           onShapeDragStart={(shapeDef) => {
             activeDraggedShapeRef.current = shapeDef;
@@ -623,6 +727,7 @@ function CanvasFlow({
             activeDraggedShapeRef.current = null;
             setGhostPreview(null);
           }}
+          onShapeSelect={handleShapeSelect}
         />
       </div>
     </CanvasFlowContext.Provider>

@@ -28,6 +28,7 @@ function SwatchButton({ item, isSelected, onSelect }: SwatchButtonProps) {
     <button
       type="button"
       title={item.name}
+      aria-pressed={isSelected}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={(e) => {

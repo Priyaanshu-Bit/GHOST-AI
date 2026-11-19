@@ -59,7 +59,7 @@ export function CanvasControlBar({ className }: CanvasControlBarProps) {
   return (
     <div
       className={cn(
-        "absolute bottom-6 left-6 z-20 flex items-center gap-1 p-1.5 rounded-full bg-surface/95 backdrop-blur-md border border-border-subtle shadow-2xl select-none nodrag nopan",
+        "absolute bottom-20 sm:bottom-6 left-6 z-20 flex items-center gap-1 p-1.5 rounded-full bg-surface/95 backdrop-blur-md border border-border-subtle shadow-2xl select-none nodrag nopan",
         className
       )}
       role="toolbar"

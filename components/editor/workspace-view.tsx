@@ -65,11 +65,6 @@ export function WorkspaceView({
   const handleImportTemplate = React.useCallback(
     (template: CanvasTemplate) => {
       setTemplateToImport(template);
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("ghost-ai:import-template", { detail: template })
-        );
-      }
     },
     []
   );

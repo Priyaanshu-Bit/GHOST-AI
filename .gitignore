@@ -53,7 +53,7 @@ dist/
 .aider-desk/
 .github/skills/
 skills-lock.json
-data/
+/data/
 CLAUDE.md
 opencode.json
 

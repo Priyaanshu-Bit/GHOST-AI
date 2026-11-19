@@ -85,14 +85,22 @@ export async function POST(request: Request) {
   // Ensure collaborative room feeds (ai-chat & ai-status-feed) exist
   try {
     await liveblocks.createFeed({ roomId, feedId: "ai-chat" });
-  } catch {
-    // 409 error is expected if feed already exists; ignore gracefully
+  } catch (err: unknown) {
+    const errorStatus = (err as { status?: number })?.status;
+    const errorMessage = String((err as Error)?.message || "");
+    if (errorStatus !== 409 && !errorMessage.includes("already exists")) {
+      console.warn("Liveblocks ai-chat feed setup notice:", err);
+    }
   }
 
   try {
     await liveblocks.createFeed({ roomId, feedId: "ai-status-feed" });
-  } catch {
-    // 409 error is expected if feed already exists; ignore gracefully
+  } catch (err: unknown) {
+    const errorStatus = (err as { status?: number })?.status;
+    const errorMessage = String((err as Error)?.message || "");
+    if (errorStatus !== 409 && !errorMessage.includes("already exists")) {
+      console.warn("Liveblocks ai-status-feed setup notice:", err);
+    }
   }
 
   // Resolve user metadata

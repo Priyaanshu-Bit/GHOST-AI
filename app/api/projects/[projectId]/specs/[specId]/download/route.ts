@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getCurrentUserIdentity, checkProjectAccess } from "@/lib/project-access";
-import { getProjectSpec, fetchSpecContent } from "@/lib/specs";
+import { fetchSpecContent } from "@/lib/specs";
+import { prisma } from "@/lib/prisma";
 
 interface RouteParams {
   params: Promise<{
@@ -49,20 +50,18 @@ export async function GET(_request: Request, context: RouteParams) {
     );
   }
 
-  // 3. Query spec metadata from Prisma
-  const spec = await getProjectSpec(specId);
+  // 3. Query spec metadata from Prisma scoped strictly to the authorized project
+  const spec = await prisma.projectSpec.findFirst({
+    where: {
+      id: specId,
+      projectId,
+    },
+  });
+
   if (!spec) {
     return NextResponse.json(
       { error: "Specification not found" },
       { status: 404 }
-    );
-  }
-
-  // Verify the spec belongs to the specified project
-  if (spec.projectId !== projectId) {
-    return NextResponse.json(
-      { error: "Forbidden: Specification does not belong to this project" },
-      { status: 403 }
     );
   }
 

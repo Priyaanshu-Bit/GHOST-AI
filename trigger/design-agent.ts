@@ -301,7 +301,7 @@ function createFallbackArchitecturePlan(prompt: string): ArchitecturePlan {
     };
   }
 
-  if (lower.includes("ci") || lower.includes("cd") || lower.includes("pipeline") || lower.includes("deploy")) {
+  if (/\b(ci|cd)\b/i.test(lower) || lower.includes("pipeline") || lower.includes("deploy")) {
     return {
       summary: "Automated CI/CD deployment pipeline with testing, container builds, and staging environments.",
       actions: [
@@ -659,94 +659,127 @@ ${NODE_COLORS.map((c) => `  * ${c.name}: fill "${c.fill}", text "${c.text}"`).jo
       await mutateFlow<CanvasNode, CanvasEdge>(
         { client: liveblocks, roomId },
         async (flow) => {
-          for (const action of plan.actions) {
-            switch (action.type) {
-              case "add_node": {
-                const defaultDims = getDefaultNodeDimensions(action.shape);
-                const width = action.width || defaultDims.width;
-                const height = action.height || defaultDims.height;
-                const node: CanvasNode = {
-                  id: action.id,
-                  type: CANVAS_NODE_TYPE,
-                  position: action.position || { x: 200, y: 200 },
-                  data: {
-                    label: action.label || "Service",
-                    description: action.description || "",
-                    shape: action.shape || "rectangle",
-                    color: action.color || "#1F1F1F",
-                    textColor: action.textColor || "#EDEDED",
-                  },
-                  style: {
-                    width,
-                    height,
-                  },
-                };
-                flow.addNode(node);
+          const idMap = new Map<string, string>();
+          const addedNodeIds: string[] = [];
+          const addedEdgeIds: string[] = [];
 
-                // Move virtual AI cursor to the newly added node
-                if (action.position) {
-                  await broadcastAiPresence(roomId, action.position, true);
-                }
-                break;
-              }
+          try {
+            for (const action of plan.actions) {
+              switch (action.type) {
+                case "add_node": {
+                  let targetId = action.id;
+                  if (flow.getNode(targetId)) {
+                    targetId = `${action.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                    idMap.set(action.id, targetId);
+                  }
 
-              case "move_node": {
-                if (action.position) {
-                  flow.updateNode(action.id, { position: action.position });
-                  await broadcastAiPresence(roomId, action.position, true);
-                }
-                break;
-              }
-
-              case "resize_node": {
-                if (action.width && action.height) {
-                  flow.updateNode(action.id, {
-                    style: { width: action.width, height: action.height },
-                  });
-                }
-                break;
-              }
-
-              case "update_node_data": {
-                flow.updateNodeData(action.id, (prevData) => ({
-                  ...prevData,
-                  ...(action.label !== undefined ? { label: action.label } : {}),
-                  ...(action.description !== undefined ? { description: action.description } : {}),
-                  ...(action.shape !== undefined ? { shape: action.shape } : {}),
-                  ...(action.color !== undefined ? { color: action.color } : {}),
-                  ...(action.textColor !== undefined ? { textColor: action.textColor } : {}),
-                }));
-                break;
-              }
-
-              case "delete_node": {
-                flow.removeNode(action.id);
-                break;
-              }
-
-              case "add_edge": {
-                if (action.source && action.target) {
-                  const edge: CanvasEdge = {
-                    id: action.id,
-                    type: CANVAS_EDGE_TYPE,
-                    source: action.source,
-                    target: action.target,
-                    sourceHandle: action.sourceHandle || "right",
-                    targetHandle: action.targetHandle || "left",
+                  const defaultDims = getDefaultNodeDimensions(action.shape);
+                  const width = action.width || defaultDims.width;
+                  const height = action.height || defaultDims.height;
+                  const node: CanvasNode = {
+                    id: targetId,
+                    type: CANVAS_NODE_TYPE,
+                    position: action.position || { x: 200, y: 200 },
                     data: {
-                      label: action.label,
+                      label: action.label || "Service",
+                      description: action.description || "",
+                      shape: action.shape || "rectangle",
+                      color: action.color || "#1F1F1F",
+                      textColor: action.textColor || "#EDEDED",
+                    },
+                    style: {
+                      width,
+                      height,
                     },
                   };
-                  flow.addEdge(edge);
-                }
-                break;
-              }
+                  flow.addNode(node);
+                  addedNodeIds.push(targetId);
 
-              case "delete_edge": {
-                flow.removeEdge(action.id);
-                break;
+                  // Move virtual AI cursor to the newly added node
+                  if (action.position) {
+                    await broadcastAiPresence(roomId, action.position, true);
+                  }
+                  break;
+                }
+
+                case "move_node": {
+                  const targetId = idMap.get(action.id) || action.id;
+                  if (action.position) {
+                    flow.updateNode(targetId, { position: action.position });
+                    await broadcastAiPresence(roomId, action.position, true);
+                  }
+                  break;
+                }
+
+                case "resize_node": {
+                  const targetId = idMap.get(action.id) || action.id;
+                  if (action.width && action.height) {
+                    flow.updateNode(targetId, {
+                      style: { width: action.width, height: action.height },
+                    });
+                  }
+                  break;
+                }
+
+                case "update_node_data": {
+                  const targetId = idMap.get(action.id) || action.id;
+                  flow.updateNodeData(targetId, (prevData) => ({
+                    ...prevData,
+                    ...(action.label !== undefined ? { label: action.label } : {}),
+                    ...(action.description !== undefined ? { description: action.description } : {}),
+                    ...(action.shape !== undefined ? { shape: action.shape } : {}),
+                    ...(action.color !== undefined ? { color: action.color } : {}),
+                    ...(action.textColor !== undefined ? { textColor: action.textColor } : {}),
+                  }));
+                  break;
+                }
+
+                case "delete_node": {
+                  const targetId = idMap.get(action.id) || action.id;
+                  flow.removeNode(targetId);
+                  break;
+                }
+
+                case "add_edge": {
+                  if (action.source && action.target) {
+                    const source = idMap.get(action.source) || action.source;
+                    const target = idMap.get(action.target) || action.target;
+                    let edgeId = action.id;
+                    if (flow.getEdge(edgeId)) {
+                      edgeId = `${action.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                    }
+                    const edge: CanvasEdge = {
+                      id: edgeId,
+                      type: CANVAS_EDGE_TYPE,
+                      source,
+                      target,
+                      sourceHandle: action.sourceHandle || "right",
+                      targetHandle: action.targetHandle || "left",
+                      data: {
+                        label: action.label,
+                      },
+                    };
+                    flow.addEdge(edge);
+                    addedEdgeIds.push(edgeId);
+                  }
+                  break;
+                }
+
+                case "delete_edge": {
+                  flow.removeEdge(action.id);
+                  break;
+                }
               }
             }
+          } catch (mutationErr) {
+            // Clean up partially applied nodes and edges on error to avoid orphaned items across retries
+            for (const edgeId of addedEdgeIds) {
+              try { flow.removeEdge(edgeId); } catch {}
+            }
+            for (const nodeId of addedNodeIds) {
+              try { flow.removeNode(nodeId); } catch {}
+            }
+            throw mutationErr;
           }
         }
       );

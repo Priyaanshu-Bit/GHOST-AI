@@ -163,11 +163,9 @@ export function AiSidebar({
           timestamp: now,
         };
 
-        try {
-          createFeedMessage("ai-chat", assistantMsg);
-        } catch (feedErr) {
+        createFeedMessage("ai-chat", assistantMsg).catch((feedErr) => {
           console.warn("Could not post completion to ai-chat feed:", feedErr);
-        }
+        });
 
         setOptimisticMessages((prev) => [...prev, assistantMsg]);
       } else if (
@@ -190,11 +188,9 @@ export function AiSidebar({
           timestamp: now,
         };
 
-        try {
-          createFeedMessage("ai-chat", errorMsg);
-        } catch {
-          // ignore
-        }
+        createFeedMessage("ai-chat", errorMsg).catch((feedErr) => {
+          console.warn("Could not post error to ai-chat feed:", feedErr);
+        });
 
         setOptimisticMessages((prev) => [...prev, errorMsg]);
         setSendError(errorText);
@@ -214,10 +210,11 @@ export function AiSidebar({
   });
 
   // Check whether the background run is actively in-flight
+  // An accepted run remains busy while its realtime subscription is loading until terminal completion
   const isRunActive = Boolean(
     activeRunId &&
-      run &&
-      (run.status === "QUEUED" ||
+      (!run ||
+        run.status === "QUEUED" ||
         run.status === "DEQUEUED" ||
         run.status === "EXECUTING" ||
         run.status === "WAITING" ||
@@ -229,8 +226,9 @@ export function AiSidebar({
     isSubmitting ||
     isRunActive ||
     isAnyOtherThinking ||
-    currentStatus?.status === "start" ||
-    currentStatus?.status === "processing";
+    (Boolean(activeRunId) &&
+      (currentStatus?.status === "start" ||
+        currentStatus?.status === "processing"));
 
   // 7. Parse and Validate collaborative chat messages
   const validatedFeedMessages = React.useMemo(() => {
@@ -480,7 +478,36 @@ export function AiSidebar({
     onComplete: handleSpecRunComplete,
   });
 
-  // Polling fallback to detect newly saved specs while generation is in flight
+  // Recover public token for spec monitoring if missing
+  React.useEffect(() => {
+    if (!specRunId || specPublicToken) return;
+    let isCancelled = false;
+
+    async function recoverSpecToken() {
+      try {
+        const res = await fetch("/api/ai/spec/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runId: specRunId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!isCancelled && data.publicToken) {
+            setSpecPublicToken(data.publicToken);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not recover spec run token:", err);
+      }
+    }
+
+    recoverSpecToken();
+    return () => {
+      isCancelled = true;
+    };
+  }, [specRunId, specPublicToken]);
+
+  // Polling fallback to keep specs list fresh during generation
   React.useEffect(() => {
     if (!isGeneratingSpec) return;
     const interval = setInterval(async () => {
@@ -490,11 +517,8 @@ export function AiSidebar({
         const res = await fetch(`/api/projects/${targetId}/specs`);
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data.specs) && data.specs.length > specs.length) {
+          if (Array.isArray(data.specs)) {
             setSpecs(data.specs);
-            setIsGeneratingSpec(false);
-            setSpecRunId(null);
-            setSpecPublicToken(null);
           }
         }
       } catch {
@@ -503,7 +527,7 @@ export function AiSidebar({
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [isGeneratingSpec, projectId, resolvedRoomId, specs.length]);
+  }, [isGeneratingSpec, projectId, resolvedRoomId]);
 
   // Trigger Spec Generation Action
   const handleGenerateSpec = React.useCallback(async () => {
@@ -519,22 +543,34 @@ export function AiSidebar({
     setSpecError(null);
 
     // Retrieve live canvas state synchronously via CustomEvent
-    let canvasData: { nodes: unknown[]; edges: unknown[] } = {
-      nodes: [],
-      edges: [],
-    };
+    let canvasData: { nodes: unknown[]; edges: unknown[] } | null = null;
+    let canvasResponded = false;
+
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent("ghost-ai:get-canvas-state", {
           detail: {
             callback: (data: { nodes: unknown[]; edges: unknown[] }) => {
-              if (data) {
+              canvasResponded = true;
+              if (data && Array.isArray(data.nodes) && Array.isArray(data.edges)) {
                 canvasData = data;
+              } else {
+                canvasData = { nodes: [], edges: [] };
               }
             },
           },
         })
       );
+    }
+
+    // Distinguish an unavailable canvas from an empty canvas
+    const currentCanvas = canvasData as { nodes: unknown[]; edges: unknown[] } | null;
+    if (!canvasResponded || !currentCanvas) {
+      setIsGeneratingSpec(false);
+      setSpecError(
+        "Canvas is not ready. Please ensure the workspace canvas is loaded and try again."
+      );
+      return;
     }
 
     // Format chat history payload from validated chat feed
@@ -554,8 +590,8 @@ export function AiSidebar({
         body: JSON.stringify({
           roomId: targetRoomId,
           chatHistory: chatPayload,
-          nodes: canvasData.nodes || [],
-          edges: canvasData.edges || [],
+          nodes: currentCanvas.nodes || [],
+          edges: currentCanvas.edges || [],
         }),
       });
 

@@ -47,6 +47,13 @@ export function SpecPreviewDialog({
     if (!open || !spec) return;
 
     let isMounted = true;
+    Promise.resolve().then(() => {
+      if (isMounted) {
+        setIsLoading(true);
+        setContent(null);
+        setError(null);
+      }
+    });
 
     fetch(`/api/projects/${projectId}/specs/${spec.id}/download`)
       .then(async (res) => {

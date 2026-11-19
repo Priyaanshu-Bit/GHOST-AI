@@ -12,26 +12,11 @@ export async function saveProjectSpec(
 ): Promise<ProjectSpec> {
   const filename = `specs/${projectId}/spec-${Date.now()}.md`;
 
-  let blob;
-  try {
-    blob = await put(filename, markdown, {
-      access: "private",
-      contentType: "text/markdown; charset=utf-8",
-    });
-  } catch (putErr) {
-    const errMsg = putErr instanceof Error ? putErr.message : String(putErr);
-    if (
-      errMsg.includes("public store") ||
-      errMsg.includes("Cannot use private access")
-    ) {
-      blob = await put(filename, markdown, {
-        access: "public",
-        contentType: "text/markdown; charset=utf-8",
-      });
-    } else {
-      throw putErr;
-    }
-  }
+  // Always upload spec with private access to enforce project boundary and access control
+  const blob = await put(filename, markdown, {
+    access: "private",
+    contentType: "text/markdown; charset=utf-8",
+  });
 
   // Create ProjectSpec metadata record in Prisma
   const record = await prisma.projectSpec.create({

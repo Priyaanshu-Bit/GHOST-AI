@@ -119,12 +119,25 @@ export async function deleteProject(projectId: string, ownerId: string) {
 }
 
 /**
- * Updates the canvas blob URL for a project.
+ * Updates the canvas blob URL for a project with optional optimistic concurrency guard.
  */
 export async function updateProjectCanvasBlobUrl(
   projectId: string,
-  canvasBlobUrl: string
+  canvasBlobUrl: string,
+  expectedPreviousUrl?: string | null
 ) {
+  if (expectedPreviousUrl !== undefined) {
+    return prisma.project.updateMany({
+      where: {
+        id: projectId,
+        canvasJsonPath: expectedPreviousUrl,
+      },
+      data: {
+        canvasJsonPath: canvasBlobUrl,
+      },
+    });
+  }
+
   return prisma.project.update({
     where: { id: projectId },
     data: {

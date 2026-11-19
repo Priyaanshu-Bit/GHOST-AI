@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ClientSideSuspense } from "@liveblocks/react";
+import { ClientSideSuspense, useErrorListener } from "@liveblocks/react";
 import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { AlertCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,7 +52,7 @@ function CanvasErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
           variant="outline"
           size="sm"
           onClick={resetErrorBoundary}
-          className="mt-4 gap-2 text-xs"
+          className="mt-4 gap-2 text-xs cursor-pointer"
         >
           <RotateCcw className="h-3.5 w-3.5" />
           <span>Retry Connection</span>
@@ -75,10 +75,30 @@ export function CanvasRoom({
   manualSaveRef,
 }: CanvasRoomProps) {
   const resolvedProjectId = projectId || roomId;
+  const [retryKey, setRetryKey] = React.useState(0);
+  const [roomError, setRoomError] = React.useState<Error | null>(null);
+
+  useErrorListener((error) => {
+    setRoomError(error instanceof Error ? error : new Error(String(error)));
+  });
+
+  const handleRetry = React.useCallback(() => {
+    setRoomError(null);
+    setRetryKey((prev) => prev + 1);
+  }, []);
+
+  if (roomError) {
+    return (
+      <CanvasErrorFallback
+        error={roomError}
+        resetErrorBoundary={handleRetry}
+      />
+    );
+  }
 
   return (
-    <div className="w-full h-full relative overflow-hidden bg-base">
-      <ErrorBoundary FallbackComponent={CanvasErrorFallback}>
+    <div key={retryKey} className="w-full h-full relative overflow-hidden bg-base">
+      <ErrorBoundary FallbackComponent={CanvasErrorFallback} onReset={handleRetry}>
         <ClientSideSuspense fallback={<CanvasLoading />}>
           <BaseCanvas
             projectId={resolvedProjectId}

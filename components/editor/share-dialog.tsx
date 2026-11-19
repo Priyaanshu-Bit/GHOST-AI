@@ -13,7 +13,7 @@ import {
 import { EditorDialog } from "@/components/editor/editor-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EnrichedCollaborator } from "@/lib/collaborators";
+import { useProjectCollaborators } from "@/hooks/useProjectCollaborators";
 
 export interface ShareDialogProps {
   open: boolean;
@@ -21,13 +21,6 @@ export interface ShareDialogProps {
   projectId: string;
   projectName?: string;
   isOwner?: boolean;
-}
-
-interface OwnerInfo {
-  id: string;
-  email: string | null;
-  name: string | null;
-  avatarUrl: string | null;
 }
 
 function getInitials(name?: string | null, email?: string | null): string {
@@ -57,53 +50,23 @@ export function ShareDialog({
 }: ShareDialogProps) {
   const [copied, setCopied] = React.useState(false);
   const [emailInput, setEmailInput] = React.useState("");
-  const [isInviting, setIsInviting] = React.useState(false);
-  const [removingId, setRemovingId] = React.useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [isLoading, setIsLoading] = React.useState(false);
 
-  const [collaborators, setCollaborators] = React.useState<
-    EnrichedCollaborator[]
-  >([]);
-  const [owner, setOwner] = React.useState<OwnerInfo | null>(null);
-  const [isOwner, setIsOwner] = React.useState<boolean>(initialIsOwner);
-
-  // Fetch collaborators list whenever dialog opens
-  React.useEffect(() => {
-    if (!open || !projectId) return;
-
-    let ignore = false;
-
-    async function load() {
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/projects/${projectId}/collaborators`);
-        if (!ignore && res.ok) {
-          const data = await res.json();
-          setCollaborators(data.collaborators || []);
-          if (data.owner) setOwner(data.owner);
-          if (typeof data.isOwner === "boolean") setIsOwner(data.isOwner);
-        } else if (!ignore) {
-          const err = await res.json().catch(() => ({}));
-          setErrorMessage(err.error || "Failed to load collaborators.");
-        }
-      } catch {
-        if (!ignore) {
-          setErrorMessage("Network error loading collaborators.");
-        }
-      } finally {
-        if (!ignore) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    load();
-
-    return () => {
-      ignore = true;
-    };
-  }, [open, projectId]);
+  const {
+    collaborators,
+    owner,
+    isOwner,
+    isLoading,
+    isInviting,
+    removingId,
+    errorMessage,
+    setErrorMessage,
+    inviteCollaborator,
+    removeCollaborator,
+  } = useProjectCollaborators({
+    projectId,
+    open,
+    initialIsOwner,
+  });
 
   const handleOpenChange = React.useCallback(
     (newOpen: boolean) => {
@@ -113,7 +76,7 @@ export function ShareDialog({
       }
       onOpenChange(newOpen);
     },
-    [onOpenChange]
+    [onOpenChange, setErrorMessage]
   );
 
   // Copy project URL to clipboard
@@ -132,65 +95,20 @@ export function ShareDialog({
   const handleInvite = React.useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      const targetEmail = emailInput.trim();
-      if (!targetEmail) return;
-
-      setIsInviting(true);
-      setErrorMessage(null);
-
-      try {
-        const res = await fetch(`/api/projects/${projectId}/collaborators`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: targetEmail }),
-        });
-
-        if (res.ok) {
-          const newCollab: EnrichedCollaborator = await res.json();
-          setCollaborators((prev) => [...prev, newCollab]);
-          setEmailInput("");
-        } else {
-          const err = await res.json().catch(() => ({}));
-          setErrorMessage(err.error || "Failed to invite collaborator.");
-        }
-      } catch {
-        setErrorMessage("Network error while inviting collaborator.");
-      } finally {
-        setIsInviting(false);
+      const success = await inviteCollaborator(emailInput);
+      if (success) {
+        setEmailInput("");
       }
     },
-    [emailInput, projectId]
+    [emailInput, inviteCollaborator]
   );
 
   // Remove collaborator
   const handleRemove = React.useCallback(
     async (collaboratorId: string) => {
-      setRemovingId(collaboratorId);
-      setErrorMessage(null);
-
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/collaborators?collaboratorId=${encodeURIComponent(
-            collaboratorId
-          )}`,
-          {
-            method: "DELETE",
-          }
-        );
-
-        if (res.ok) {
-          setCollaborators((prev) => prev.filter((c) => c.id !== collaboratorId));
-        } else {
-          const err = await res.json().catch(() => ({}));
-          setErrorMessage(err.error || "Failed to remove collaborator.");
-        }
-      } catch {
-        setErrorMessage("Network error while removing collaborator.");
-      } finally {
-        setRemovingId(null);
-      }
+      await removeCollaborator(collaboratorId);
     },
-    [projectId]
+    [removeCollaborator]
   );
 
   return (
@@ -249,14 +167,14 @@ export function ShareDialog({
                 placeholder="colleague@example.com"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                disabled={isInviting}
+                disabled={isInviting || isLoading}
                 className="text-xs bg-subtle border-border-subtle"
                 required
               />
               <Button
                 type="submit"
                 size="sm"
-                disabled={isInviting || !emailInput.trim()}
+                disabled={isInviting || isLoading || !emailInput.trim()}
                 className="shrink-0 gap-1.5 text-xs"
               >
                 {isInviting ? (

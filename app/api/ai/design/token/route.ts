@@ -18,13 +18,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: TokenRequestBody;
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return NextResponse.json(
+      { error: "Expected JSON object body" },
+      { status: 400 }
+    );
+  }
+
+  const body = rawBody as TokenRequestBody;
   const { runId } = body;
 
   if (!runId || typeof runId !== "string" || !runId.trim()) {
@@ -71,8 +79,9 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("Failed to generate Trigger.dev public token:", err);
-    const message =
-      err instanceof Error ? err.message : "Failed to generate run token";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate run token" },
+      { status: 500 }
+    );
   }
 }

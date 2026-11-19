@@ -76,16 +76,19 @@ export interface ShapePanelProps {
   className?: string;
   onShapeDragStart?: (shape: ShapeDefinition) => void;
   onShapeDragEnd?: () => void;
+  onShapeSelect?: (shape: ShapeDefinition) => void;
 }
 
 /**
  * Floating pill-shaped toolbar at the bottom-center of the canvas.
- * Allows users to drag shapes directly onto the canvas to create new nodes.
+ * Allows users to drag shapes directly onto the canvas to create new nodes,
+ * or click/press Enter/Space on any shape to place it at the viewport center.
  */
 export function ShapePanel({
   className,
   onShapeDragStart,
   onShapeDragEnd,
+  onShapeSelect,
 }: ShapePanelProps) {
   const handleDragStart = (
     event: React.DragEvent<HTMLButtonElement>,
@@ -125,8 +128,15 @@ export function ShapePanel({
             draggable
             onDragStart={(e) => handleDragStart(e, def)}
             onDragEnd={handleDragEnd}
-            title={`Drag ${def.label} to canvas`}
-            aria-label={def.label}
+            onClick={() => onShapeSelect?.(def)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onShapeSelect?.(def);
+              }
+            }}
+            title={`Click or drag ${def.label} to canvas`}
+            aria-label={`${def.label} (click or press Enter to add)`}
             className="flex items-center justify-center h-9 w-9 rounded-full text-copy-secondary hover:text-copy-primary hover:bg-subtle active:scale-95 transition-all cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
           >
             <Icon className="h-4 w-4" />

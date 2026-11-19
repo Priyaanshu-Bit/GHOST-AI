@@ -40,6 +40,11 @@ declare global {
           thinking: boolean;
           isThinking?: boolean;
           timestamp?: number;
+        }
+      | {
+          type: "access-revoked";
+          collaboratorEmail: string;
+          timestamp: number;
         };
 
     // Custom metadata set on threads, for useThreads, useCreateThread, etc.

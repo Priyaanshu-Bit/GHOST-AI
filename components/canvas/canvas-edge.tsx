@@ -150,14 +150,23 @@ export function CanvasEdgeComponent({
               onMouseDown={(e) => e.stopPropagation()}
             />
           ) : labelText ? (
-            <div
+            <button
+              type="button"
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
               }}
-              title={labelText}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setIsEditing(true);
+                }
+              }}
+              title={`${labelText} (double-click or press Enter to edit)`}
+              aria-label={`Edge note: ${labelText}. Press Enter to edit.`}
               className={cn(
-                "bg-[#18181b]/95 border text-[11px] font-medium px-2.5 py-0.5 rounded-full shadow-lg backdrop-blur-sm cursor-text transition-all max-w-[200px] truncate text-center",
+                "bg-[#18181b]/95 border text-[11px] font-medium px-2.5 py-0.5 rounded-full shadow-lg backdrop-blur-sm cursor-text transition-all max-w-[200px] truncate text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00c8d4]",
                 selected
                   ? "border-[#00c8d4] text-[#00c8d4] ring-1 ring-[#00c8d4]/30"
                   : isHovered
@@ -166,7 +175,7 @@ export function CanvasEdgeComponent({
               )}
             >
               {labelText}
-            </div>
+            </button>
           ) : (isHovered || selected) ? (
             <button
               type="button"

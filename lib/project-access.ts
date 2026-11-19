@@ -28,9 +28,15 @@ export async function getCurrentUserIdentity(): Promise<UserIdentity | null> {
   }
 
   const user = await currentUser();
+  const verifiedPrimary =
+    user?.primaryEmailAddress?.verification?.status === "verified"
+      ? user.primaryEmailAddress.emailAddress
+      : null;
+
   const email =
-    user?.primaryEmailAddress?.emailAddress ??
-    user?.emailAddresses?.[0]?.emailAddress ??
+    verifiedPrimary ??
+    user?.emailAddresses?.find((e) => e.verification?.status === "verified")
+      ?.emailAddress ??
     null;
 
   return { userId, email };

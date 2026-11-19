@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Phase 29: Spec UI Integration & Preview in Editor Sidebar (Completed)
+- CodeRabbit PR #6 Review Remediation (Completed)
 
 ## Current Goal
 
-- All 29 phases implemented and verified. Ready for end-to-end user workflows.
+- All 61 CodeRabbit PR review findings addressed across security, persistence, canvas collaboration, and UI accessibility.
 
 ## In Progress
 
@@ -16,9 +16,43 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- Production verification and polish.
+- PR #6 merge and production deployment.
 
 ## Completed
+
+- CodeRabbit PR #6 Review Remediation:
+  - Addressed all 61 review comments (29 Major, 30 Minor, 2 Trivial).
+  - Enforced Clerk verified-email requirement for project collaborators.
+  - Added Liveblocks access revocation broadcast upon collaborator removal.
+  - Enforced private Vercel Blob access for all technical specifications.
+  - Added concurrency checks for canvas blob URL updates to prevent lost updates.
+  - Secured canvas REST endpoints with array validation and deferred stale blob deletion.
+  - Scoped spec downloads to project ID and spec ID to prevent ID enumeration.
+  - Made fallback spec generation reflect observed canvas topology without hallucinating connections.
+  - Escaped Markdown table cell delimiters in fallback generator.
+  - Prevented Trigger.dev task add action from overwriting existing canvas nodes.
+  - Matched CI/CD terms at word boundaries rather than as substrings.
+  - Added atomic rollback of partially added nodes/edges on task failure.
+  - Added initialization marker (`isInitialized`) in Liveblocks storage to preserve intentionally emptied canvases.
+  - Handled snapshot restoration retry and cancellation safely.
+  - Validated drag payload with `NODE_SHAPES` check and positive finite dimension constraints.
+  - Rendered AI cursor in flow coordinates via `ViewportPortal`.
+  - Consolidated template import into a single path and grouped canvas clearing and population into a single Liveblocks undo batch (`room.batch`).
+  - Added responsive stacking layout for zoom/history toolbar and shape palette on narrow screens.
+  - Made edge notes keyboard-accessible with native button and Enter/Space activation.
+  - Added keyboard activation (Enter) for canvas node label editing.
+  - Restricted clearing of editing presence only to the active editing node.
+  - Added click and keyboard Enter/Space placement for shape palette.
+  - Added terminal error recovery boundary for Liveblocks canvas room.
+  - Resolved queueing of reverts and unpersisted baseline handling in `useCanvasAutosave`.
+  - Ignored canvas undo/redo while focus is inside modal dialogs.
+  - Added `aria-pressed` to node color swatches.
+  - Extracted collaborator management into `useProjectCollaborators` hook with body-read cancellation and mutation locking.
+  - Initialized spec preview loading state before starting fetch.
+  - Handled async rejections on `createFeedMessage` promises.
+  - Bound AI busy lock to active run ID, preventing historical status from blocking input.
+  - Added recovery path for spec realtime run tokens via `/api/ai/spec/token`.
+  - Distinguished unavailable canvas from empty canvas during spec generation trigger.
 
 - Next.js boilerplate cleanup.
 - `01-design-system.md` — Design System & UI Primitive Components:

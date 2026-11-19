@@ -1,5 +1,6 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { liveblocks } from "@/lib/liveblocks";
 
 export interface EnrichedCollaborator {
   id: string;
@@ -283,19 +284,36 @@ export async function removeCollaborator(
     };
   }
 
-  const deleted = await prisma.projectCollaborator.deleteMany({
+  const target = await prisma.projectCollaborator.findFirst({
     where: {
       id: collaboratorId,
       projectId,
     },
   });
 
-  if (deleted.count === 0) {
+  if (!target) {
     return {
       success: false,
       error: "Collaborator not found.",
       statusCode: 404,
     };
+  }
+
+  await prisma.projectCollaborator.delete({
+    where: {
+      id: target.id,
+    },
+  });
+
+  // Invalidate Liveblocks room access for this collaborator
+  try {
+    await liveblocks.broadcastEvent(projectId, {
+      type: "access-revoked",
+      collaboratorEmail: target.email,
+      timestamp: Date.now(),
+    });
+  } catch (lbErr) {
+    console.warn("Could not broadcast room access revocation:", lbErr);
   }
 
   return { success: true };
