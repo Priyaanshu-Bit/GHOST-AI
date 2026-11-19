@@ -117,3 +117,18 @@ export async function deleteProject(projectId: string, ownerId: string) {
 
   return result.count;
 }
+
+/**
+ * Updates the canvas blob URL for a project.
+ */
+export async function updateProjectCanvasBlobUrl(
+  projectId: string,
+  canvasBlobUrl: string
+) {
+  return prisma.project.update({
+    where: { id: projectId },
+    data: {
+      canvasJsonPath: canvasBlobUrl,
+    },
+  });
+}

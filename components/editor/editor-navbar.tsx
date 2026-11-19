@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, LayoutTemplate } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 export interface EditorNavbarProps {
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
+  onOpenTemplates?: () => void;
+  presenceSlot?: React.ReactNode;
   centerSection?: React.ReactNode;
   rightSection?: React.ReactNode;
   children?: React.ReactNode;
@@ -21,10 +23,14 @@ export interface EditorNavbarProps {
  * and handles toggle clicks through `onToggleSidebar`.
  * Uses `children` as center content when `centerSection` is falsy.
  * Includes Clerk UserButton in the right section for profile and session management.
+ * Provides starter templates entry point via `onOpenTemplates`.
+ * Optionally accepts `presenceSlot` for rendering canvas room collaborator avatars.
  */
 export function EditorNavbar({
   isSidebarOpen = false,
   onToggleSidebar,
+  onOpenTemplates,
+  presenceSlot,
   centerSection,
   rightSection,
   children,
@@ -60,10 +66,27 @@ export function EditorNavbar({
         {centerSection || children}
       </div>
 
-      {/* Right section: custom actions + Clerk UserButton */}
-      <div className="flex items-center justify-end gap-3">
+      {/* Right section: template entry point + custom actions + Clerk UserButton */}
+      <div className="flex items-center justify-end gap-2">
+        {onOpenTemplates && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onOpenTemplates}
+            className="flex items-center gap-1.5 text-xs text-copy-secondary hover:text-copy-primary hover:bg-subtle cursor-pointer"
+            title="Starter Architecture Templates"
+            aria-label="Open starter templates"
+          >
+            <LayoutTemplate className="h-3.5 w-3.5 text-accent-primary" />
+            <span className="hidden sm:inline font-medium">Templates</span>
+          </Button>
+        )}
         {rightSection}
-        <UserButton />
+        {presenceSlot ? (
+          <div className="flex items-center pl-1">{presenceSlot}</div>
+        ) : (
+          <UserButton />
+        )}
       </div>
     </header>
   );
