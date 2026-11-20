@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Autonomous Direct Serverless AI Execution (Completed)
+- Automated 1080p Video Showcase & Public Showcase Route (Completed)
 
 ## Current Goal
 
-- Enable instant, zero-queue serverless execution on Vercel for AI Architect and Spec generation, eliminating background worker dependency.
+- Provide real feature video recording and interactive showcase demonstration for portfolio, LinkedIn, and social sharing.
 
 ## In Progress
 
@@ -16,9 +16,17 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- User testing and feedback on live deployment.
+- Social sharing and LinkedIn post publishing.
 
 ## Completed
+
+- **Automated 1080p Feature Video Showcase & Public Showcase Route**:
+  - Implemented interactive showcase route at `/showcase` displaying the complete Ghost AI workspace with dark theme (#080809), Liveblocks presence simulation, React Flow canvas, Starter Templates modal, AI Architect drawer, and PRD spec synthesis.
+  - Added public matcher in `proxy.ts` to allow direct access without Clerk sign-in hurdles.
+  - Automated video recording via Playwright and system Chrome at native 1080p (1920x1080) 60fps.
+  - Encoded into pristine universal MP4 with FFmpeg (`videos/ghost-ai-feature-showcase.mp4`, 1.49 MB, H.264/yuv420p) with `+faststart` metadata for instant web and social media playback.
+  - Created standalone script `scripts/record-showcase.js` for reproducible automated recordings.
+  - Persisted master MP4 to both `videos/` and the conversation artifacts directory.
 
 - **Autonomous Direct Serverless AI Execution**:
   - Extracted core design agent logic into `lib/ai/design-service.ts` and spec synthesis into `lib/ai/spec-service.ts`.
