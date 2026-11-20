@@ -344,11 +344,36 @@ export function AiSidebar({
 
         const data = await response.json();
 
-        if (data.runId) {
-          setActiveRunId(data.runId);
-        }
-        if (data.publicToken) {
-          setPublicToken(data.publicToken);
+        if (data.completed && data.summary) {
+          const now = Date.now();
+          const assistantMsg: ChatFeedMessage = {
+            id: `ai-${now}`,
+            sender: "Ghost AI",
+            role: "assistant",
+            content: data.summary,
+            timestamp: now,
+          };
+          setOptimisticMessages((prev) => [...prev, assistantMsg]);
+          try {
+            await createFeedMessage("ai-chat", {
+              sender: "Ghost AI",
+              role: "assistant",
+              content: data.summary,
+              timestamp: now,
+            });
+          } catch (feedErr) {
+            console.warn("Note: Liveblocks chat feed dispatch:", feedErr);
+          }
+          setActiveRunId(null);
+          setPublicToken(null);
+          setRealtimeStatus(null);
+        } else {
+          if (data.runId) {
+            setActiveRunId(data.runId);
+          }
+          if (data.publicToken) {
+            setPublicToken(data.publicToken);
+          }
         }
       } catch (err) {
         console.error("Failed to trigger design agent:", err);
@@ -605,11 +630,18 @@ export function AiSidebar({
       }
 
       const data = await response.json();
-      if (data.runId) {
-        setSpecRunId(data.runId);
-      }
-      if (data.publicToken) {
-        setSpecPublicToken(data.publicToken);
+      if (data.completed || data.specId) {
+        setIsGeneratingSpec(false);
+        setSpecRunId(null);
+        setSpecPublicToken(null);
+        await fetchSpecs();
+      } else {
+        if (data.runId) {
+          setSpecRunId(data.runId);
+        }
+        if (data.publicToken) {
+          setSpecPublicToken(data.publicToken);
+        }
       }
     } catch (err) {
       console.error("Failed to trigger spec generation:", err);
@@ -618,7 +650,7 @@ export function AiSidebar({
       );
       setIsGeneratingSpec(false);
     }
-  }, [isGeneratingSpec, resolvedRoomId, allMessages]);
+  }, [isGeneratingSpec, resolvedRoomId, allMessages, fetchSpecs]);
 
   // Download Spec handler calling secure download endpoint
   const handleDownloadSpec = React.useCallback(

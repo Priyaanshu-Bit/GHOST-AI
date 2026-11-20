@@ -12,10 +12,13 @@ export async function saveProjectSpec(
 ): Promise<ProjectSpec> {
   const filename = `specs/${projectId}/spec-${Date.now()}.md`;
 
+  const sanitizedBlobToken = process.env.BLOB_READ_WRITE_TOKEN?.replace(/^["']|["']$/g, "").trim();
+
   // Always upload spec with private access to enforce project boundary and access control
   const blob = await put(filename, markdown, {
     access: "private",
     contentType: "text/markdown; charset=utf-8",
+    token: sanitizedBlobToken,
   });
 
   // Create ProjectSpec metadata record in Prisma
@@ -59,9 +62,11 @@ export async function getProjectSpecs(
 export async function fetchSpecContent(filePath: string): Promise<string> {
   if (filePath.includes("blob.vercel-storage.com")) {
     const isPrivate = filePath.includes("private.blob.vercel-storage.com");
+    const sanitizedBlobToken = process.env.BLOB_READ_WRITE_TOKEN?.replace(/^["']|["']$/g, "").trim();
     try {
       const blobRes = await get(filePath, {
         access: isPrivate ? "private" : "public",
+        token: sanitizedBlobToken,
       });
       if (blobRes && blobRes.statusCode === 200 && blobRes.stream) {
         return await new Response(blobRes.stream).text();
@@ -71,6 +76,7 @@ export async function fetchSpecContent(filePath: string): Promise<string> {
       try {
         const fallbackRes = await get(filePath, {
           access: isPrivate ? "public" : "private",
+          token: sanitizedBlobToken,
         });
         if (fallbackRes && fallbackRes.statusCode === 200 && fallbackRes.stream) {
           return await new Response(fallbackRes.stream).text();

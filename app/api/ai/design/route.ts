@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { tasks, triggerAuth } from "@/lib/trigger";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserIdentity, checkProjectAccess } from "@/lib/project-access";
-import type { designAgent } from "@/trigger/design-agent";
+import { executeDesignAgent } from "@/lib/ai/design-service";
+
+export const maxDuration = 60; // 60 seconds max execution time for Vercel serverless functions
 
 interface DesignRequestBody {
   prompt?: string;
@@ -14,8 +15,8 @@ interface DesignRequestBody {
 /**
  * POST /api/ai/design
  * Accepts the design prompt and context (roomId, projectId).
- * Triggers the Trigger.dev design task, stores the TaskRun in Prisma,
- * and returns the run ID.
+ * Executes the AI design agent directly on serverless, writes to Liveblocks canvas,
+ * stores the TaskRun audit record in Prisma, and returns the generation summary.
  */
 export async function POST(request: Request) {
   const { userId } = await auth();
@@ -80,47 +81,37 @@ export async function POST(request: Request) {
   const authorizedId = access.project.id;
 
   try {
-    // Trigger design agent task through Trigger.dev scoped strictly to authorized project ID
-    const handle = await tasks.trigger<typeof designAgent>("design-agent", {
-      prompt: prompt.trim(),
-      roomId: authorizedId,
-      projectId: authorizedId,
-    });
+    const runId = `serverless_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    // Create TaskRun record in Prisma to track ownership
+    // Create TaskRun record in Prisma to track ownership and auditing
     await prisma.taskRun.create({
       data: {
-        runId: handle.id,
+        runId,
         projectId: authorizedId,
         userId,
       },
     });
 
-    // Generate Trigger.dev public token scoped strictly to read this run
-    let publicToken: string | undefined;
-    try {
-      publicToken = await triggerAuth.createPublicToken({
-        scopes: {
-          read: {
-            runs: [handle.id],
-          },
-        },
-      });
-    } catch (tokenErr) {
-      console.warn("Could not generate public token at dispatch:", tokenErr);
-    }
+    // Execute design agent directly and synchronously on Vercel
+    const result = await executeDesignAgent({
+      prompt: prompt.trim(),
+      roomId: authorizedId,
+      projectId: authorizedId,
+    });
 
     return NextResponse.json({
       success: true,
-      runId: handle.id,
-      publicToken,
+      runId,
+      summary: result.summary,
+      actionCount: result.actionCount,
+      completed: true,
     });
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
-    console.error("Failed to trigger design agent task:", errorDetail, err);
+    console.error("Failed to execute design agent task:", errorDetail, err);
     return NextResponse.json(
       {
-        error: "Failed to trigger background design task",
+        error: "Failed to generate architecture design",
         details: errorDetail,
       },
       { status: 500 }
