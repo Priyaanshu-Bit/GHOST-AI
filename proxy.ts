@@ -12,6 +12,7 @@ const signUpUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL || "/sign-up";
 const isPublicRoute = createRouteMatcher([
   `${signInUrl}(.*)`,
   `${signUpUrl}(.*)`,
+  "/showcase(.*)",
 ]);
 
 const clerkHandler = hasClerkKeys
