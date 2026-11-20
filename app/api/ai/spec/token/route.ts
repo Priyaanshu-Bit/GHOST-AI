@@ -71,6 +71,16 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (cleanRunId.startsWith("serverless_")) {
+      return NextResponse.json({
+        success: true,
+        token: "serverless_completed",
+        publicAccessToken: "serverless_completed",
+        runId: cleanRunId,
+        expiresIn: "1h",
+      });
+    }
+
     // 4. Issue Trigger.dev public access token scoped to read this run with 1-hour expiration
     const publicToken = await triggerAuth.createPublicToken({
       scopes: {

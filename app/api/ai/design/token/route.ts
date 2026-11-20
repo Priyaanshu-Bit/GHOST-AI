@@ -62,6 +62,15 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (runId.trim().startsWith("serverless_")) {
+      return NextResponse.json({
+        success: true,
+        token: "serverless_completed",
+        publicAccessToken: "serverless_completed",
+        runId: runId.trim(),
+      });
+    }
+
     // Generate a Trigger.dev public token scoped strictly to read this run
     const publicToken = await triggerAuth.createPublicToken({
       scopes: {

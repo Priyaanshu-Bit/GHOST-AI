@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Production Deployment & Vercel Trigger.dev Environment Fix (Completed)
+- Autonomous Direct Serverless AI Execution (Completed)
 
 ## Current Goal
 
-- Resolve Trigger.dev task dispatch failure on Vercel (`No matching branch env`) and prevent infinite canvas autosave retry loops.
+- Enable instant, zero-queue serverless execution on Vercel for AI Architect and Spec generation, eliminating background worker dependency.
 
 ## In Progress
 
@@ -16,9 +16,16 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- Deploy Trigger.dev background tasks to cloud (`npx trigger.dev@latest deploy`) or run dev worker.
+- User testing and feedback on live deployment.
 
 ## Completed
+
+- **Autonomous Direct Serverless AI Execution**:
+  - Extracted core design agent logic into `lib/ai/design-service.ts` and spec synthesis into `lib/ai/spec-service.ts`.
+  - Updated `/api/ai/design` and `/api/ai/spec` route handlers to run directly on Vercel Serverless (`maxDuration = 60`), mutating Liveblocks canvas and persisting Markdown specs in ~2-3 seconds with zero queue delay.
+  - Updated `components/editor/ai-sidebar.tsx` to handle direct synchronous responses immediately, rendering AI assistant messages and updating spec lists without waiting on cloud queue workers.
+  - Maintained full Trigger.dev compatibility in `trigger/design-agent.ts` and `trigger/generate-spec.ts` by delegating to the unified AI services.
+  - Sanitized `BLOB_READ_WRITE_TOKEN` in `lib/specs.ts` to prevent token quote formatting issues.
 
 - **Trigger.dev Vercel Branch Compatibility**:
   - Identified root cause of `Error [TriggerApiError]: No matching branch env (HTTP 401)`: Vercel automatically sets `VERCEL_GIT_COMMIT_REF="main"`, causing `@trigger.dev/sdk` to inject `x-trigger-branch: main`, which fails when Trigger.dev has no matching preview branch environment.

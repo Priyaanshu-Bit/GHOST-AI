@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { tasks, triggerAuth } from "@/lib/trigger";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserIdentity, checkProjectAccess } from "@/lib/project-access";
 import { SpecTriggerRequestSchema } from "@/types/tasks";
-import type { generateSpec } from "@/trigger/generate-spec";
+import { executeSpecGeneration } from "@/lib/ai/spec-service";
+
+export const maxDuration = 60; // 60 seconds max execution time for Vercel functions
 
 /**
  * POST /api/ai/spec
  * Conforms to 27-spec-generation-flow.md:
  * - Accepts `roomId`, `chatHistory`, `nodes`, and `edges`.
  * - Authenticates the current user via Clerk.
- * - Resolves project access strictly from `roomId` (never trusts client-supplied projectId).
- * - Triggers the `generate-spec` Trigger.dev background task.
- * - Saves a `TaskRun` record in Prisma for ownership/access control.
- * - Returns the Trigger.dev `runId` and scoped public access token.
+ * - Resolves project access strictly from `roomId`.
+ * - Executes spec synthesis directly on serverless.
+ * - Saves generated Markdown spec to Vercel Blob and records metadata in Prisma.
+ * - Returns the generated spec record.
  */
 export async function POST(request: Request) {
   // 1. Authenticate user
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: errorMsg }, { status: 400 });
   }
 
-  const { roomId, chatHistory, nodes, edges } = parsed.data;
+  const { roomId } = parsed.data;
 
   // 3. Resolve project access strictly from roomId
   const access = await checkProjectAccess(roomId, identity);
@@ -56,50 +57,37 @@ export async function POST(request: Request) {
   const resolvedProjectId = access.project.id;
 
   try {
-    // 4. Trigger the generate-spec task through Trigger.dev
-    const handle = await tasks.trigger<typeof generateSpec>("generate-spec", {
-      projectId: resolvedProjectId,
-      roomId,
-      chatHistory,
-      nodes,
-      edges,
-    });
+    const runId = `serverless_spec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    // 5. Save TaskRun record in Prisma for ownership tracking
+    // 4. Save TaskRun record in Prisma for ownership tracking
     await prisma.taskRun.create({
       data: {
-        runId: handle.id,
+        runId,
         projectId: resolvedProjectId,
         userId,
       },
     });
 
-    // 6. Generate 1-hour scoped Trigger.dev public access token
-    let publicToken: string | undefined;
-    try {
-      publicToken = await triggerAuth.createPublicToken({
-        scopes: {
-          read: {
-            runs: [handle.id],
-          },
-        },
-        expirationTime: "1h",
-      });
-    } catch (tokenErr) {
-      console.warn("Could not generate public token at spec dispatch:", tokenErr);
-    }
+    // 5. Execute spec generation directly on serverless
+    const result = await executeSpecGeneration({
+      ...parsed.data,
+      projectId: resolvedProjectId,
+    });
 
     return NextResponse.json({
       success: true,
-      runId: handle.id,
-      publicToken,
+      runId,
+      specId: result.specId,
+      title: result.title,
+      spec: result.spec,
+      completed: true,
     });
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
-    console.error("Failed to trigger generate-spec task:", errorDetail, err);
+    console.error("Failed to generate architecture spec:", errorDetail, err);
     return NextResponse.json(
       {
-        error: "Failed to trigger spec background task",
+        error: "Failed to generate architecture spec",
         details: errorDetail,
       },
       { status: 500 }
